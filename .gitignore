@@ -1,0 +1,6 @@
+DynoLogger.xcodeproj/
+.build/
+.swiftpm/
+xcuserdata/
+DerivedData/
+tools/out/

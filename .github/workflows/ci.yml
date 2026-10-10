@@ -1,0 +1,28 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Core tests
+        run: swift test --package-path Core
+      - name: Generate Xcode project
+        run: brew install xcodegen && xcodegen
+      - name: Build app (simulator, unsigned)
+        run: >
+          xcodebuild -project DynoLogger.xcodeproj -scheme DynoLogger
+          -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+  dyno-format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: syntaxless/virtual-dyno
+          path: virtual-dyno
+      - run: pip install playwright && python -m playwright install --with-deps chromium
+      - name: App output loads in the Virtual Dyno
+        run: python tools/check_dyno.py virtual-dyno
