@@ -56,7 +56,7 @@ public enum ELM327 {
         var out: [[UInt8]] = []
         var multi: [UInt8] = []
         var multiLength: Int?
-        for raw in response.split(whereSeparator: { $0 == "\r" || $0 == "\n" }) {
+        for raw in response.split(whereSeparator: \.isNewline) {
             let line = raw.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: ">", with: "").uppercased()
             if line.isEmpty || line.hasPrefix("SEARCHING") || line.hasPrefix("BUSINIT") { continue }
             if line.count == 3, let n = Int(line, radix: 16) {

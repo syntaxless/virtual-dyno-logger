@@ -56,6 +56,10 @@ final class ELM327Tests: XCTestCase {
         XCTAssertEqual(v[.vehicleSpeed], 50)
     }
 
+    func testCRLF() {
+        XCTAssertEqual(ELM327.parse("410C1AF8\r\n>")[.engineRPM], 1726)
+    }
+
     func testSpacesAndTwoECUs() {
         let v = ELM327.parse("41 0C 1A F8\r41 0C 00 00\r>")
         XCTAssertEqual(v[.engineRPM], 1726)
@@ -91,7 +95,7 @@ final class NMEATests: XCTestCase {
         XCTAssertTrue(n.feed(Data(text[..<half].utf8)).isEmpty)
         let pts = n.feed(Data(text[half...].utf8))
         XCTAssertEqual(pts.count, 1)
-        let p = pts[0]
+        guard let p = pts.first else { return }
         XCTAssertEqual(p.latitude, 48.1173, accuracy: 1e-6)
         XCTAssertEqual(p.longitude, 11.516666, accuracy: 1e-5)
         XCTAssertEqual(p.speed!, 22.4 * 1852 / 3600, accuracy: 1e-9)
@@ -129,6 +133,7 @@ final class RaceBoxTests: XCTestCase {
         XCTAssertTrue(d.feed(Data([0x00, 0x13] + packet[..<30])).isEmpty)
         let r = d.feed(Data(packet[30...]))
         XCTAssertEqual(r.count, 1)
+        guard !r.isEmpty else { return }
         XCTAssertEqual(r[0].point.time, Date(timeIntervalSince1970: 1_791_651_903.125))
         XCTAssertEqual(r[0].point.latitude, 39.7392358, accuracy: 1e-9)
         XCTAssertEqual(r[0].point.longitude, -104.990251, accuracy: 1e-9)

@@ -12,7 +12,8 @@ public struct NMEAAssembler {
     public mutating func feed(_ data: Data) -> [TrackPoint] {
         buffer += String(decoding: data, as: UTF8.self)
         var points: [TrackPoint] = []
-        while let nl = buffer.firstIndex(where: { $0 == "\n" || $0 == "\r" }) {
+        // isNewline, not == "\n": Swift reads "\r\n" as one Character, equal to neither "\r" nor "\n".
+        while let nl = buffer.firstIndex(where: \.isNewline) {
             let line = String(buffer[..<nl])
             buffer.removeSubrange(...nl)
             if let p = take(line) { points.append(p) }
