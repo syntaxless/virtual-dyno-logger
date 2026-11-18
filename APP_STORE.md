@@ -29,9 +29,9 @@ archive), SKU anything, e.g. `virtualdynologger`.
 | Category | Utilities (secondary: Navigation, or none) |
 | Age rating | 4+ (answer "None" to everything) |
 | Price | Free |
-| Support URL | https://virtualdynologger.turboloser.co/support/ |
-| Marketing URL | https://virtualdynologger.turboloser.co/ |
-| Privacy Policy URL | https://virtualdynologger.turboloser.co/privacy/ |
+| Support URL | https://dynologger.turboloser.co/support/ |
+| Marketing URL | https://dynologger.turboloser.co/ |
+| Privacy Policy URL | https://dynologger.turboloser.co/privacy/ |
 | Copyright | 2026 followed by your name or business name |
 
 Keywords (100 characters, comma separated, no spaces needed):

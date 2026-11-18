@@ -2,9 +2,9 @@ import SwiftUI
 
 /// Version, the support site's pages (privacy policy, support), the dyno, and the font licence.
 struct AboutView: View {
-    static let site = URL(string: "https://virtualdynologger.turboloser.co/")!
-    static let support = URL(string: "https://virtualdynologger.turboloser.co/support/")!
-    static let privacy = URL(string: "https://virtualdynologger.turboloser.co/privacy/")!
+    static let site = URL(string: "https://dynologger.turboloser.co/")!
+    static let support = URL(string: "https://dynologger.turboloser.co/support/")!
+    static let privacy = URL(string: "https://dynologger.turboloser.co/privacy/")!
 
     private var version: String {
         let info = Bundle.main.infoDictionary
@@ -32,7 +32,7 @@ struct AboutView: View {
 
                 Panel(title: "Help") {
                     Link(destination: Self.support) { Text("Support") }.buttonStyle(BracketButtonStyle())
-                    Link(destination: Self.site) { Text("virtualdynologger.turboloser.co") }.buttonStyle(BracketButtonStyle())
+                    Link(destination: Self.site) { Text("dynologger.turboloser.co") }.buttonStyle(BracketButtonStyle())
                 }
 
                 Panel(title: "Credits") {
