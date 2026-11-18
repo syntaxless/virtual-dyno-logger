@@ -386,15 +386,28 @@ final class RunCheckTests: XCTestCase {
 }
 
 final class AccessportMergeTests: XCTestCase {
-    private func rpm(_ t: Double) -> Double { 2500 + 900 * sin(t / 7) + 400 * sin(t / 2.3 + 1) + (t > 60 && t < 70 ? (t - 60) * 400 : 0) }
-    private func kmh(_ t: Double) -> Double { 80 + 20 * sin(t / 11) + 10 * sin(t / 3.7 + 2) }
+    private func rpm(_ t: Double) -> Double {
+        let wave: Double = 900 * sin(t / 7) + 400 * sin(t / 2.3 + 1)
+        let pull: Double = t > 60 && t < 70 ? (t - 60) * 400 : 0
+        return 2500 + wave + pull
+    }
+    private func kmh(_ t: Double) -> Double {
+        let wave: Double = 20 * sin(t / 11) + 10 * sin(t / 3.7 + 2)
+        return 80 + wave
+    }
 
     /// An OBD log of 120 s at 10 Hz in the app's format, and an Accessport log at 15 Hz that started `lag` s into the run.
     private func logs(lag: Double, apAmbient: Bool = false) -> (obd: String, ap: String) {
         let start = Date(timeIntervalSince1970: 1_800_000_000)
-        let samples = stride(from: 0.0, to: 120, by: 0.1).map { t in
-            EngineSample(time: t, rpm: rpm(t), speedKmh: kmh(t), pedalRaw: 20, mapKPa: 100, baroKPa: t < 1 ? 98 : nil,
-                         ambientC: t < 1 ? 21 : nil, phoneBaroKPa: 98.4 - t * 0.001, fuelPercent: t < 1 ? 50 : nil)
+        var samples: [EngineSample] = []
+        for t in stride(from: 0.0, to: 120.0, by: 0.1) {
+            let first: Bool = t < 1
+            let baro: Double? = first ? 98 : nil
+            let ambient: Double? = first ? 21 : nil
+            let fuel: Double? = first ? 50 : nil
+            let phone: Double = 98.4 - t * 0.001
+            samples.append(EngineSample(time: t, rpm: rpm(t), speedKmh: kmh(t), pedalRaw: 20, mapKPa: 100, baroKPa: baro,
+                                        ambientC: ambient, phoneBaroKPa: phone, fuelPercent: fuel))
         }
         let wx = [WeatherSnapshot(time: start, latitude: 1, longitude: 2, temperatureC: 20, humidity: 45, windSpeedMPH: 5, windFromDeg: 90)]
         let obd = EngineLog.csv(samples, weather: wx, start: start, vehicle: VehicleProfile(curbWeightLb: 3300, driverCargoLb: 200))
@@ -402,7 +415,9 @@ final class AccessportMergeTests: XCTestCase {
             + (apAmbient ? ",Ambient Air Temp (F)" : "") + "\n"
         for t in stride(from: 0.0, to: 80, by: 1.0 / 15) {
             let s = t + lag
-            ap += String(format: "%.3f,%.0f,%.0f,%.1f,%.1f", t, rpm(s), kmh(s) / 1.609344, 25.0, 24.6) + (apAmbient ? ",68.0" : "") + "\n"
+            let mph: Double = kmh(s) / 1.609344
+            let row: String = String(format: "%.3f,%.0f,%.0f,%.1f,%.1f", t, rpm(s), mph, 25.0, 24.6)
+            ap += row + (apAmbient ? ",68.0" : "") + "\n"
         }
         return (obd, ap)
     }
