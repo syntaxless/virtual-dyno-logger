@@ -9,6 +9,8 @@ the [Virtual Dyno](https://dyno.turboloser.co) reads.
 | RaceBox Mini / Mini S / Micro | CoreBluetooth, Nordic UART, RaceBox binary messages | 25 Hz GPS: position, speed, heading, altitude |
 | Any BLE GPS that sends NMEA over Nordic UART | CoreBluetooth | GPS at the receiver's rate |
 | The iPhone's own GPS | CoreLocation | about 1 Hz GPS (used when no external GPS is connected) |
+| The iPhone's barometer | CoreMotion (CMAltimeter) | air pressure, and altitude change in steps of about 10 cm for road grade |
+| Open-Meteo weather | HTTPS, at the start and end of a run (a switch on the Record screen) | humidity, wind, air temperature and sea-level pressure where the phone is |
 | GoPro HERO9 or later | Open GoPro BLE | starts and stops video with the run; sets the camera clock to the phone's so the video lines up with the logs |
 
 Dragy is listed but not supported: its Bluetooth protocol is not public. Export the run from the Dragy app and load its
@@ -38,7 +40,20 @@ Time (msec),Engine Speed (RPM),Vehicle Speed (km/h),Accel. Pedal Position (%),Am
 - Boost is gauge pressure: manifold pressure minus the logged barometric pressure.
 - Ambient temperature and pressure fill the dyno's air temperature and density altitude.
 
-The `.gpx` is GPX 1.0 so each point can carry `<speed>` (m/s), which both the dyno and video-overlay read.
+After those come columns the dyno can pick from (their names stay clear of the words the dyno's column matching
+looks for, so they never replace the columns above by mistake):
+
+- `Phone Pressure (psi)`: the iPhone's barometer. When the car reports no barometric pressure, `Ambient Pressure (psi)`
+  is filled from the phone too.
+- `Weather Humidity (%)`, `Weather Wind (MPH)`, `Weather Wind From (deg)`, `Weather Air Temp (F)`,
+  `Weather Sea-Level Pressure (hPa)`: Open-Meteo's current conditions where the phone was, from the snapshot nearest
+  each row (one at the start of the run and one at the end). Only the location rounded to 0.01 degree (about 1 km) is
+  sent. With no signal the run is saved without them, and the dyno can still look the weather up from the GPX.
+
+The `.gpx` is GPX 1.0 so each point can carry `<speed>` (m/s), which both the dyno and video-overlay read. Each point
+also carries the phone's barometer in the app's own namespace (`xmlns:dl="https://dynologger.turboloser.co/gpx/1"`):
+`<dl:relalt>` is the altitude change since the run started in metres, for road grade, and `<dl:pressure>` is in hPa.
+Other GPX readers skip them.
 
 ## Recording a pull
 

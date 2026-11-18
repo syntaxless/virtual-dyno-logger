@@ -9,6 +9,7 @@ struct RecordView: View {
     @EnvironmentObject private var phoneGPS: PhoneGPS
     @AppStorage("vehicle") private var vehicle = ""
     @AppStorage("useGoPro") private var useGoPro = true
+    @AppStorage("fetchWeather") private var fetchWeather = true
     @FocusState private var editingVehicle: Bool
 
     var body: some View {
@@ -42,6 +43,13 @@ struct RecordView: View {
                 if goPro.ready {
                     Toggle("Record video with each run", isOn: $useGoPro).toggleStyle(BracketToggleStyle())
                 }
+                source("Baro", baroText, ok: recorder.barometer.pressureKPa != nil)
+                source("Weather", weatherText, ok: recorder.weatherState == .got)
+                Toggle("Fetch the weather for each run", isOn: $fetchWeather)
+                    .toggleStyle(BracketToggleStyle())
+                    .disabled(recorder.isRecording)
+                Text("Sends only your location, rounded to about 1 km, to Open-Meteo.com at the start and end of a run.")
+                    .font(.vtCaption).foregroundStyle(Phosphor.mut)
             }
 
             recordButton
@@ -54,7 +62,9 @@ struct RecordView: View {
                 }
             }
             if let e = recorder.error { PromptLine(text: e, color: Phosphor.err) }
-            if let saved = recorder.lastSaved, !recorder.isRecording {
+            if recorder.saving {
+                PromptLine(text: "Saving the run (waiting a few seconds for the weather)...", color: Phosphor.amber)
+            } else if let saved = recorder.lastSaved, !recorder.isRecording {
                 PromptLine(text: "Saved \(saved.lastPathComponent). Open it from the Runs tab.", color: Phosphor.amber)
             }
             PromptLine(text: "For a dyno pull: floor it in one gear from low RPM to redline on a flat, straight road. "
@@ -103,6 +113,30 @@ struct RecordView: View {
         }
     }
 
+    private var baroText: String {
+        guard PhoneBarometer.available else { return "Not on this iPhone" }
+        guard let p = recorder.barometer.pressureKPa else { return recorder.isRecording ? "Waiting" : "Starts with the run" }
+        return String(format: "%.1f hPa", p * 10)
+    }
+
+    private var weatherText: String {
+        switch recorder.weatherState {
+        case .off: return fetchWeather ? "Fetched with the run" : "Off: the dyno can look it up later"
+        case .waitingForFix: return "Waiting for a GPS fix"
+        case .fetching: return "Fetching"
+        case .failed: return "No signal: the dyno can look it up later"
+        case .got:
+            guard let w = recorder.weather else { return "Fetched" }
+            var parts: [String] = []
+            if let t = w.temperatureC { parts.append(String(format: "%.0f °F", t * 9 / 5 + 32)) }
+            if let h = w.humidity { parts.append(String(format: "%.0f%%", h)) }
+            if let s = w.windSpeedMPH {
+                parts.append(String(format: "wind %.0f MPH", s) + (w.windFromDeg.map { String(format: " from %.0f°", $0) } ?? ""))
+            }
+            return parts.joined(separator: ", ")
+        }
+    }
+
     private var gpsText: String {
         if gps.connected { return "\(gps.name), " + String(format: "%.0f Hz", gps.rate) + (gps.battery.map { ", \($0)%" } ?? "") }
         if phoneGPS.latest != nil { return "iPhone, 1 Hz" + (phoneGPS.accuracy.map { String(format: ", ±%.0f m", $0) } ?? "") }
@@ -111,7 +145,7 @@ struct RecordView: View {
 
     private func toggle() {
         editingVehicle = false
-        if recorder.isRecording { recorder.stop() } else { recorder.start(vehicle: vehicle, useGoPro: useGoPro) }
+        if recorder.isRecording { recorder.stop() } else { recorder.start(vehicle: vehicle, useGoPro: useGoPro, fetchWeather: fetchWeather) }
     }
 
     private func source(_ title: String, _ detail: String, ok: Bool, color: Color = Phosphor.fg) -> some View {

@@ -162,3 +162,100 @@ final class SessionTests: XCTestCase {
                        "GolfR_2026-10-10_170503")
     }
 }
+
+final class PhoneSensorTests: XCTestCase {
+    func testPhoneBarometerFillsAmbientPressureOnlyWhenTheCarHasNone() {
+        let noCarBaro = EngineLog.csv([
+            EngineSample(time: 0, rpm: 2400, speedKmh: 50, mapKPa: 180, phoneBaroKPa: 98.5),
+            EngineSample(time: 0.05, rpm: 2450, speedKmh: 51, mapKPa: 190),
+        ])
+        XCTAssertEqual(noCarBaro, """
+        Time (msec),Engine Speed (RPM),Vehicle Speed (km/h),Ambient Pressure (psi),Boost Press. (psi),Phone Pressure (psi)
+        0,2400,50,14.29,11.8,14.286
+        50,2450,51,14.29,13.3,14.286
+
+        """)
+        let carBaro = EngineLog.csv([EngineSample(time: 0, rpm: 2400, speedKmh: 50, baroKPa: 98, phoneBaroKPa: 98.5)])
+        XCTAssertEqual(carBaro, "Time (msec),Engine Speed (RPM),Vehicle Speed (km/h),Ambient Pressure (psi),Phone Pressure (psi)\n"
+                       + "0,2400,50,14.21,14.286\n")
+    }
+
+    func testWeatherColumnsUseTheNearestSnapshot() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let a = WeatherSnapshot(time: start, latitude: 39.74, longitude: -104.99, temperatureC: 10, humidity: 40,
+                                windSpeedMPH: 6.24, windFromDeg: 230, pressureMSLhPa: 1013.3)
+        let b = WeatherSnapshot(time: start.addingTimeInterval(600), latitude: 39.74, longitude: -104.99, temperatureC: 11,
+                                humidity: 38, windSpeedMPH: 7, windFromDeg: 240)
+        let csv = EngineLog.csv([EngineSample(time: 0, rpm: 900, speedKmh: 0), EngineSample(time: 500, rpm: 900, speedKmh: 0)],
+                                weather: [b, a], start: start)
+        XCTAssertEqual(csv, """
+        Time (msec),Engine Speed (RPM),Vehicle Speed (km/h),Weather Humidity (%),Weather Wind (MPH),Weather Wind From (deg),Weather Air Temp (F),Weather Sea-Level Pressure (hPa)
+        0,900,0,40,6.2,230,50.0,1013.3
+        500000,900,0,38,7.0,240,51.8,
+
+        """)
+        // No start time or no snapshots: no weather columns.
+        XCTAssertFalse(EngineLog.csv([EngineSample(time: 0, rpm: 900, speedKmh: 0)], weather: [a]).contains("Weather"))
+    }
+
+    func testWeatherColumnNamesStayClearOfTheDynosMatching() {
+        // The dyno's parse() takes the first header matching these; the new columns must never be that first match.
+        let names = ["Phone Pressure (psi)", "Weather Humidity (%)", "Weather Wind (MPH)", "Weather Wind From (deg)",
+                     "Weather Air Temp (F)", "Weather Sea-Level Pressure (hPa)"]
+        for n in names {
+            for word in ["time", "rpm", "engine speed", "speed", "ambient", "baro", "boost", "pedal", "throttle"] {
+                XCTAssertFalse(n.lowercased().contains(word), "\(n) contains \(word)")
+            }
+        }
+    }
+
+    func testGPXCarriesTheBarometer() {
+        let t = Date(timeIntervalSince1970: 1_791_651_903)
+        let gpx = GPX.document([TrackPoint(time: t, latitude: 1, longitude: 2, relativeAltitude: -1.234, pressure: 985.12)],
+                               name: "x")
+        XCTAssertTrue(gpx.contains("xmlns:dl=\"https://dynologger.turboloser.co/gpx/1\""))
+        XCTAssertTrue(gpx.contains("<dl:relalt>-1.23</dl:relalt><dl:pressure>985.12</dl:pressure></trkpt>"))
+    }
+
+    func testOpenMeteoURLRoundsTheLocation() {
+        let url = OpenMeteo.currentURL(latitude: 39.739236, longitude: -104.990251)!.absoluteString
+        XCTAssertTrue(url.hasPrefix("https://api.open-meteo.com/v1/forecast?"))
+        XCTAssertTrue(url.contains("latitude=39.74&longitude=-104.99&"))
+        XCTAssertTrue(url.contains("current=temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,pressure_msl"))
+        XCTAssertFalse(url.contains("39.739"))
+        XCTAssertNil(OpenMeteo.currentURL(latitude: .nan, longitude: 0))
+    }
+
+    func testOpenMeteoCurrentParses() throws {
+        let json = """
+        {"latitude":39.74,"longitude":-104.99,"elevation":1608.0,"current_units":{"time":"iso8601"},
+         "current":{"time":"2026-11-18T06:15","interval":900,"temperature_2m":3.4,"relative_humidity_2m":61,
+                    "wind_speed_10m":5.8,"wind_direction_10m":204,"pressure_msl":1019.6}}
+        """
+        let w = try OpenMeteo.parseCurrent(Data(json.utf8))
+        XCTAssertEqual(w.time, Date(timeIntervalSince1970: 1_794_982_500))
+        XCTAssertEqual(w.humidity, 61)
+        XCTAssertEqual(w.windSpeedMPH, 5.8)
+        XCTAssertEqual(w.windFromDeg, 204)
+        XCTAssertEqual(w.temperatureC, 3.4)
+        XCTAssertEqual(w.pressureMSLhPa, 1019.6)
+        XCTAssertThrowsError(try OpenMeteo.parseCurrent(Data("{\"error\":true}".utf8)))
+        let partial = try OpenMeteo.parseCurrent(Data("""
+        {"latitude":1,"longitude":2,"current":{"time":"2026-11-18T06:15","relative_humidity_2m":50,"pressure_msl":null}}
+        """.utf8))
+        XCTAssertNil(partial.pressureMSLhPa)
+        XCTAssertEqual(partial.humidity, 50)
+    }
+
+    func testSessionJSONFrom1_0StillDecodes() throws {
+        let old = """
+        {"vehicle":"Golf R","start":"2026-10-10T17:05:03Z","end":"2026-10-10T17:06:03Z","engineRows":10,"trackPoints":5,
+         "goProRecorded":false}
+        """
+        let dec = JSONDecoder()
+        dec.dateDecodingStrategy = .iso8601
+        let s = try dec.decode(SessionSummary.self, from: Data(old.utf8))
+        XCTAssertEqual(s.weather, [])
+        XCTAssertFalse(s.phoneBarometer)
+    }
+}

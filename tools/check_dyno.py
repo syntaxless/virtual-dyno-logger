@@ -68,7 +68,7 @@ def simulate():
     while T < 29.5:
         _, v, ped, mp = at(T)
         s = dict(time=T, rpm=k * v + random.uniform(-15, 15), kmh=round(v * 3.6), ped=round(ped * 255 / 100) * 100 / 255,
-                 map=round(mp), baro=None, amb=None)
+                 map=round(mp), baro=None, amb=None, phone=98.3 - T * 0.0005)
         if cycle % 30 == 0:
             s["baro"], s["amb"] = 98.0, 21.0
         engine.append(s)
@@ -81,20 +81,28 @@ def simulate():
     while T < 29.5:
         _, v, _, _ = at(T)
         track.append(dict(time=start + dt.timedelta(seconds=T + 3.0), lat=lat0, lon=lon0 + x / (111320 * math.cos(math.radians(lat0))),
-                          ele=ele0 + x * 0.002, speed=v + random.gauss(0, 0.05), course=90.0, sat=14, hdop=0.7))
+                          ele=ele0 + x * 0.002, speed=v + random.gauss(0, 0.05), course=90.0, sat=14, hdop=0.7,
+                          relalt=x * 0.002, pressure=983.0 - x * 0.002 * 0.11))
         x += v * 0.04
         T += 0.04
     return engine, track
 
 
+# One Open-Meteo snapshot, as the app writes it into every row (EngineLog.csv's weather columns).
+WEATHER = dict(humidity=41, wind=6.2, wind_from=230, temp_c=21.0, msl=1016.4)
+
+
 def engine_csv(samples):
-    """Mirror of EngineLog.csv(_:pedalSource: .pedal)."""
+    """Mirror of EngineLog.csv(_:pedalSource: .pedal, weather: [one snapshot], start:), with the iPhone barometer."""
     vals = sorted(s["ped"] for s in samples)
     lo, hi = vals[int((len(vals) - 1) * 0.02)], vals[int((len(vals) - 1) * 0.995)]
     if hi - lo < 25:
         lo, hi = 0, 100
     lines = ["Time (msec),Engine Speed (RPM),Vehicle Speed (km/h),Accel. Pedal Position (%),Ambient Air Temp (F),"
-             "Ambient Pressure (psi),Boost Press. (psi)"]
+             "Ambient Pressure (psi),Boost Press. (psi),Phone Pressure (psi),Weather Humidity (%),Weather Wind (MPH),"
+             "Weather Wind From (deg),Weather Air Temp (F),Weather Sea-Level Pressure (hPa)"]
+    w = WEATHER
+    wx = [f"{w['humidity']:.0f}", f"{w['wind']:.1f}", f"{w['wind_from']:.0f}", f"{w['temp_c'] * 9 / 5 + 32:.1f}", f"{w['msl']:.1f}"]
     last, baro, amb = None, None, None
     for s in samples:
         baro = s["baro"] if s["baro"] is not None else baro
@@ -107,20 +115,23 @@ def engine_csv(samples):
         lines.append(",".join([str(ms), str(round(s["rpm"])), str(s["kmh"]), f"{ped:.1f}",
                                "" if amb is None else f"{amb * 9 / 5 + 32:.1f}",
                                "" if baro is None else f"{baro * PSI_PER_KPA:.2f}",
-                               f"{(s['map'] - (baro or 101.325)) * PSI_PER_KPA:.1f}"]))
+                               f"{(s['map'] - (baro or 101.325)) * PSI_PER_KPA:.1f}",
+                               f"{s['phone'] * PSI_PER_KPA:.3f}"] + wx))
     return "\n".join(lines) + "\n"
 
 
 def gpx(points, name):
     """Mirror of GPX.document(_:name:)."""
     out = ['<?xml version="1.0" encoding="UTF-8"?>',
-           '<gpx version="1.0" creator="Virtual Dyno Logger" xmlns="http://www.topografix.com/GPX/1/0">',
+           '<gpx version="1.0" creator="Virtual Dyno Logger" xmlns="http://www.topografix.com/GPX/1/0"'
+           ' xmlns:dl="https://dynologger.turboloser.co/gpx/1">',
            f"<trk><name>{name}</name><trkseg>"]
     for p in points:
         ts = p["time"].strftime("%Y-%m-%dT%H:%M:%S.") + f"{p['time'].microsecond // 1000:03d}Z"
         out.append(f'<trkpt lat="{p["lat"]:.7f}" lon="{p["lon"]:.7f}"><ele>{p["ele"]:.2f}</ele><time>{ts}</time>'
                    f'<course>{p["course"]:.1f}</course><speed>{p["speed"]:.3f}</speed><sat>{p["sat"]}</sat>'
-                   f'<hdop>{p["hdop"]:.2f}</hdop></trkpt>')
+                   f'<hdop>{p["hdop"]:.2f}</hdop><dl:relalt>{p["relalt"]:.2f}</dl:relalt>'
+                   f'<dl:pressure>{p["pressure"]:.2f}</dl:pressure></trkpt>')
     out.append("</trkseg></trk>\n</gpx>\n")
     return "\n".join(out)
 
@@ -155,7 +166,7 @@ async def main():
         failed = [i for i in ("#msg", "#gmsg") if "err" in (await page.get_attribute(i, "class") or "")]
         tiles = await page.evaluate("""['s1','s2','s3','s4'].map(id=>{const e=document.getElementById(id);
             return e.querySelector('legend').textContent+': '+e.querySelector('.n').textContent+' '+e.querySelector('i').textContent+' '+e.querySelector('em').textContent})""")
-        fields = await page.evaluate("""['temp','da','head','grade'].map(id=>id+'='+document.getElementById(id).value)""")
+        fields = await page.evaluate("""['temp','da','humid','wind','head','grade'].map(id=>id+'='+document.getElementById(id).value)""")
         await b.close()
 
     print("engine log:", msg, "\ngps:", gmsg, "\nfields:", ", ".join(fields))

@@ -57,12 +57,22 @@ Description (draft):
 >
 > Only use the app where it is legal and safe: on a closed course or a dyno. Set it up before you drive.
 
-## App Privacy ("Data Not Collected")
+## App Privacy
 
-App Store Connect > App Privacy > Get Started > "No, we do not collect data from this app". The app sends nothing off
-the phone (no analytics, no network calls other than opening links in Safari), which is what Apple counts as collection,
-and `App/Resources/PrivacyInfo.xcprivacy` says the same. If the app ever starts sending anything, update both and the
-privacy policy page.
+**1.0: "Data Not Collected".** App Store Connect > App Privacy > Get Started > "No, we do not collect data from this
+app". 1.0 sends nothing off the phone (no analytics, no network calls other than opening links in Safari).
+
+**1.1 and later: Coarse Location.** 1.1 fetches the weather for each run from Open-Meteo (a switch on the Record screen,
+on by default), sending the location rounded to about 1 km. Before submitting 1.1, change App Privacy to:
+- Data types: Location > **Coarse Location**.
+- Used for: **App Functionality** only.
+- Linked to the user's identity: **No**. Used for tracking: **No**.
+
+`App/Resources/PrivacyInfo.xcprivacy` already declares this, and the support site's privacy page says it. If the app
+starts sending anything else, update all three.
+
+Open-Meteo's free API is for non-commercial use. A free app with no ads or in-app purchases fits that; if the app is
+ever sold or carries ads, take an Open-Meteo API subscription or move the lookup to Apple's WeatherKit.
 
 ## Export compliance
 

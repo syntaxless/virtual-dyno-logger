@@ -18,9 +18,15 @@ public struct SessionSummary: Codable, Equatable, Sendable {
     public var obdAdapter: String?
     public var pedalSource: PedalSource?
     public var goProRecorded: Bool
+    /// Open-Meteo snapshots taken at the start and end of the run (empty when the phone had no signal or the person
+    /// turned weather off).
+    public var weather: [WeatherSnapshot]
+    /// Whether the iPhone's barometer was recorded.
+    public var phoneBarometer: Bool
 
     public init(vehicle: String, start: Date, end: Date, engineRows: Int, trackPoints: Int, trackSource: String?,
-                obdAdapter: String?, pedalSource: PedalSource?, goProRecorded: Bool) {
+                obdAdapter: String?, pedalSource: PedalSource?, goProRecorded: Bool,
+                weather: [WeatherSnapshot] = [], phoneBarometer: Bool = false) {
         self.vehicle = vehicle
         self.start = start
         self.end = end
@@ -30,6 +36,24 @@ public struct SessionSummary: Codable, Equatable, Sendable {
         self.obdAdapter = obdAdapter
         self.pedalSource = pedalSource
         self.goProRecorded = goProRecorded
+        self.weather = weather
+        self.phoneBarometer = phoneBarometer
+    }
+
+    // session.json files written by 1.0 have neither key.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        vehicle = try c.decode(String.self, forKey: .vehicle)
+        start = try c.decode(Date.self, forKey: .start)
+        end = try c.decode(Date.self, forKey: .end)
+        engineRows = try c.decode(Int.self, forKey: .engineRows)
+        trackPoints = try c.decode(Int.self, forKey: .trackPoints)
+        trackSource = try c.decodeIfPresent(String.self, forKey: .trackSource)
+        obdAdapter = try c.decodeIfPresent(String.self, forKey: .obdAdapter)
+        pedalSource = try c.decodeIfPresent(PedalSource.self, forKey: .pedalSource)
+        goProRecorded = try c.decode(Bool.self, forKey: .goProRecorded)
+        weather = try c.decodeIfPresent([WeatherSnapshot].self, forKey: .weather) ?? []
+        phoneBarometer = try c.decodeIfPresent(Bool.self, forKey: .phoneBarometer) ?? false
     }
 }
 
@@ -51,7 +75,7 @@ public enum SessionFiles {
         let dir = root.appendingPathComponent(name, isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         if !engine.isEmpty {
-            try EngineLog.csv(engine, pedalSource: summary.pedalSource ?? .pedal)
+            try EngineLog.csv(engine, pedalSource: summary.pedalSource ?? .pedal, weather: summary.weather, start: summary.start)
                 .write(to: dir.appendingPathComponent(name + ".csv"), atomically: true, encoding: .utf8)
         }
         if !track.isEmpty {
