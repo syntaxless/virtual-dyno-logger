@@ -50,6 +50,10 @@ looks for, so they never replace the columns above by mistake):
   each row (one at the start of the run and one at the end). Only the location rounded to 0.01 degree (about 1 km) is
   sent. With no signal the run is saved without them, and the dyno can still look the weather up from the GPX.
 
+- `Fuel Level (%)` from the car (PID 0x2F), and the vehicle profile from **Weight & drag** on the Record screen:
+  `Curb Weight (lbs)` (the typed full-tank curb weight less the fuel missing at that row, 6.1 lb a gallon),
+  `Driver + Cargo (lbs)`, `Drag Coefficient` and `Frontal Area (m2)`. The dyno fills its fields of the same names.
+
 The `.gpx` is GPX 1.0 so each point can carry `<speed>` (m/s), which both the dyno and video-overlay read. Each point
 also carries the phone's barometer in the app's own namespace (`xmlns:dl="https://dynologger.turboloser.co/gpx/1"`):
 `<dl:relalt>` is the altitude change since the run started in metres, for road grade, and `<dl:pressure>` is in hPa.

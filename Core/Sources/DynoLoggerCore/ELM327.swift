@@ -6,6 +6,7 @@ public enum OBDPID: UInt8, CaseIterable, Sendable {
     case engineRPM = 0x0C
     case vehicleSpeed = 0x0D // km/h
     case throttle = 0x11     // %
+    case fuelLevel = 0x2F    // %, fuel tank level
     case baro = 0x33         // kPa
     case ambientTemp = 0x46  // C
     case pedalD = 0x49       // %
@@ -22,7 +23,7 @@ public enum OBDPID: UInt8, CaseIterable, Sendable {
         switch self {
         case .engineRPM: return (a * 256 + Double(b[1])) / 4
         case .vehicleSpeed, .map, .baro: return a
-        case .throttle, .pedalD: return a * 100 / 255
+        case .throttle, .pedalD, .fuelLevel: return a * 100 / 255
         case .ambientTemp: return a - 40
         }
     }

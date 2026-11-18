@@ -100,7 +100,8 @@ def engine_csv(samples):
         lo, hi = 0, 100
     lines = ["Time (msec),Engine Speed (RPM),Vehicle Speed (km/h),Accel. Pedal Position (%),Ambient Air Temp (F),"
              "Ambient Pressure (psi),Boost Press. (psi),Phone Pressure (psi),Weather Humidity (%),Weather Wind (MPH),"
-             "Weather Wind From (deg),Weather Air Temp (F),Weather Sea-Level Pressure (hPa)"]
+             "Weather Wind From (deg),Weather Air Temp (F),Weather Sea-Level Pressure (hPa),Fuel Level (%),Curb Weight (lbs),"
+             "Driver + Cargo (lbs),Drag Coefficient,Frontal Area (m2)"]
     w = WEATHER
     wx = [f"{w['humidity']:.0f}", f"{w['wind']:.1f}", f"{w['wind_from']:.0f}", f"{w['temp_c'] * 9 / 5 + 32:.1f}", f"{w['msl']:.1f}"]
     last, baro, amb = None, None, None
@@ -116,7 +117,8 @@ def engine_csv(samples):
                                "" if amb is None else f"{amb * 9 / 5 + 32:.1f}",
                                "" if baro is None else f"{baro * PSI_PER_KPA:.2f}",
                                f"{(s['map'] - (baro or 101.325)) * PSI_PER_KPA:.1f}",
-                               f"{s['phone'] * PSI_PER_KPA:.3f}"] + wx))
+                               f"{s['phone'] * PSI_PER_KPA:.3f}"] + wx
+                              + ["50.0", f"{3300 - 0.5 * 14.5 * 6.1:.0f}", "200", "0.320", "2.20"]))
     return "\n".join(lines) + "\n"
 
 
@@ -166,7 +168,7 @@ async def main():
         failed = [i for i in ("#msg", "#gmsg") if "err" in (await page.get_attribute(i, "class") or "")]
         tiles = await page.evaluate("""['s1','s2','s3','s4'].map(id=>{const e=document.getElementById(id);
             return e.querySelector('legend').textContent+': '+e.querySelector('.n').textContent+' '+e.querySelector('i').textContent+' '+e.querySelector('em').textContent})""")
-        fields = await page.evaluate("""['temp','da','humid','wind','head','grade'].map(id=>id+'='+document.getElementById(id).value)""")
+        fields = await page.evaluate("""['curb','load','cd','area','temp','da','humid','wind','head','grade'].map(id=>id+'='+document.getElementById(id).value)""")
         await b.close()
 
     print("engine log:", msg, "\ngps:", gmsg, "\nfields:", ", ".join(fields))

@@ -130,7 +130,7 @@ final class OBDLink: NSObject, ObservableObject, PeripheralLink {
             pedalSource = supported.contains(OBDPID.pedalD.rawValue) ? .pedal : .throttle
             var fast: [OBDPID] = [.engineRPM, .vehicleSpeed, pedalSource == .pedal ? .pedalD : .throttle]
             if has(.map) { fast.append(.map) }
-            let slow = [OBDPID.baro, .ambientTemp].filter { supported.contains($0.rawValue) }
+            let slow = [OBDPID.baro, .ambientTemp, .fuelLevel].filter { supported.contains($0.rawValue) }
 
             // CAN cars answer several PIDs per request; older protocols need one request per PID.
             let probe = ELM327.parse(try await send(ELM327.request(fast), timeout: 2))

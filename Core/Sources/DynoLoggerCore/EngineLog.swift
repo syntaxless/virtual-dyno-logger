@@ -17,9 +17,12 @@ public struct EngineSample: Equatable, Sendable {
     /// The iPhone's own barometer (CMAltimeter), kPa. Cabin pressure, which is within a few hundredths of a psi of the
     /// air outside with the windows up.
     public var phoneBaroKPa: Double?
+    /// Fuel tank level (PID 0x2F), %.
+    public var fuelPercent: Double?
 
     public init(time: TimeInterval, rpm: Double, speedKmh: Double, pedalRaw: Double? = nil,
-                mapKPa: Double? = nil, baroKPa: Double? = nil, ambientC: Double? = nil, phoneBaroKPa: Double? = nil) {
+                mapKPa: Double? = nil, baroKPa: Double? = nil, ambientC: Double? = nil, phoneBaroKPa: Double? = nil,
+                fuelPercent: Double? = nil) {
         self.time = time
         self.rpm = rpm
         self.speedKmh = speedKmh
@@ -28,6 +31,7 @@ public struct EngineSample: Equatable, Sendable {
         self.baroKPa = baroKPa
         self.ambientC = ambientC
         self.phoneBaroKPa = phoneBaroKPa
+        self.fuelPercent = fuelPercent
     }
 }
 
@@ -53,13 +57,16 @@ public enum PedalSource: String, Codable, Sendable {
 /// - "Phone Pressure (psi)": the iPhone's barometer, always, so the dyno can compare it with the car's;
 /// - "Weather Humidity (%)", "Weather Wind (MPH)", "Weather Wind From (deg)", "Weather Air Temp (F)",
 ///   "Weather Sea-Level Pressure (hPa)": Open-Meteo's current conditions where the phone was, from the snapshot
-///   nearest in time to each row (one is taken at the start of the run and one at the end).
+///   nearest in time to each row (one is taken at the start of the run and one at the end);
+/// - "Fuel Level (%)" from the car, and the vehicle profile typed in the app: "Curb Weight (lbs)" (the typed curb
+///   weight, which is with a full tank, less the fuel that is not in the tank at that row), "Driver + Cargo (lbs)",
+///   "Drag Coefficient" and "Frontal Area (m2)". The first two are the dyno's own field names.
 public enum EngineLog {
     public static let psiPerKPa = 1 / 6.89476
     static let standardBaroKPa = 101.325
 
     public static func csv(_ samples: [EngineSample], pedalSource: PedalSource = .pedal,
-                           weather: [WeatherSnapshot] = [], start: Date? = nil) -> String {
+                           weather: [WeatherSnapshot] = [], start: Date? = nil, vehicle: VehicleProfile? = nil) -> String {
         let hasPedal = samples.contains { $0.pedalRaw != nil }
         let hasMAP = samples.contains { $0.mapKPa != nil }
         let hasBaro = samples.contains { $0.baroKPa != nil }
@@ -82,6 +89,13 @@ public enum EngineLog {
         if hasMAP { header.append("Boost Press. (psi)") }
         if hasPhoneBaro { header.append("Phone Pressure (psi)") }
         header += wxCols.map(\.0)
+        let hasFuel = samples.contains { $0.fuelPercent != nil }
+        let vp = vehicle?.isEmpty == false ? vehicle : nil
+        if hasFuel { header.append("Fuel Level (%)") }
+        if vp?.curbWeightLb != nil { header.append("Curb Weight (lbs)") }
+        if vp?.driverCargoLb != nil { header.append("Driver + Cargo (lbs)") }
+        if vp?.dragCoefficient != nil { header.append("Drag Coefficient") }
+        if vp?.frontalAreaM2 != nil { header.append("Frontal Area (m2)") }
 
         var lines = [header.joined(separator: ",")]
         var lastMs = Int.min
@@ -89,7 +103,9 @@ public enum EngineLog {
         var baro: Double?
         var ambient: Double?
         var phone: Double?
+        var fuel: Double?
         for s in samples {
+            if let f = s.fuelPercent { fuel = f }
             if let b = s.baroKPa { baro = b }
             if let a = s.ambientC { ambient = a }
             if let p = s.phoneBaroKPa { phone = p }
@@ -110,6 +126,13 @@ public enum EngineLog {
                 let t = start.addingTimeInterval(s.time)
                 let w = wx.min { abs($0.time.timeIntervalSince(t)) < abs($1.time.timeIntervalSince(t)) }!
                 row += wxCols.map { $0.1(w) ?? "" }
+            }
+            if hasFuel { row.append(fuel.map { fmt($0, 1) } ?? "") }
+            if let vp {
+                if vp.curbWeightLb != nil { row.append(vp.weightLb(fuelPercent: fuel).map { fmt($0, 0) } ?? "") }
+                if let d = vp.driverCargoLb { row.append(fmt(d, 0)) }
+                if let c = vp.dragCoefficient { row.append(fmt(c, 3)) }
+                if let a = vp.frontalAreaM2 { row.append(fmt(a, 2)) }
             }
             lines.append(row.joined(separator: ","))
         }

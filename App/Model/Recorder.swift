@@ -81,7 +81,8 @@ final class Recorder: ObservableObject {
             pedalSource: engine.isEmpty ? nil : ble.obd.pedalSource,
             goProRecorded: usedGoPro,
             phoneBarometer: engine.contains { $0.phoneBaroKPa != nil } || externalTrack.contains { $0.pressure != nil }
-                || phoneTrack.contains { $0.pressure != nil }
+                || phoneTrack.contains { $0.pressure != nil },
+            vehicleProfile: VehicleProfiles.profile(for: UserDefaults.standard.string(forKey: "vehicle") ?? "")
         )
         let engine = self.engine, track = external ? externalTrack : phoneTrack, root = sessions.root
         guard !engine.isEmpty || !track.isEmpty else { error = "Nothing was recorded: no OBD-II or GPS data came in."; return }
@@ -115,7 +116,7 @@ final class Recorder: ObservableObject {
             rpm: rpm, speedKmh: speed,
             pedalRaw: r.values[.pedalD] ?? r.values[.throttle],
             mapKPa: r.values[.map], baroKPa: r.values[.baro], ambientC: r.values[.ambientTemp],
-            phoneBaroKPa: barometer.pressureKPa
+            phoneBaroKPa: barometer.pressureKPa, fuelPercent: r.values[.fuelLevel]
         ))
         engineRows = engine.count
     }

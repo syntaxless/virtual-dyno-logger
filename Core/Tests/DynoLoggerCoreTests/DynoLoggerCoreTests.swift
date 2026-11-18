@@ -259,3 +259,38 @@ final class PhoneSensorTests: XCTestCase {
         XCTAssertFalse(s.phoneBarometer)
     }
 }
+
+final class VehicleProfileTests: XCTestCase {
+    func testWeightTakesOffMissingFuel() {
+        let p = VehicleProfile(curbWeightLb: 3300, driverCargoLb: 200, tankGallons: 14.5)
+        XCTAssertEqual(p.weightLb(fuelPercent: 100)!, 3300, accuracy: 1e-9)
+        XCTAssertEqual(p.weightLb(fuelPercent: 50)!, 3300 - 7.25 * 6.1, accuracy: 1e-9)
+        XCTAssertEqual(p.weightLb(fuelPercent: nil)!, 3300, accuracy: 1e-9)
+        XCTAssertEqual(VehicleProfile(curbWeightLb: 3300).weightLb(fuelPercent: 20)!, 3300, accuracy: 1e-9)   // no tank size
+        XCTAssertNil(VehicleProfile(driverCargoLb: 200).weightLb(fuelPercent: 50))
+    }
+
+    func testSanitizedDropsTypos() {
+        let p = VehicleProfile(curbWeightLb: 33000, driverCargoLb: 200, tankGallons: 0, dragCoefficient: 32, frontalAreaM2: 2.2).sanitized()
+        XCTAssertEqual(p, VehicleProfile(driverCargoLb: 200, frontalAreaM2: 2.2))
+    }
+
+    func testProfileAndFuelColumns() {
+        let p = VehicleProfile(curbWeightLb: 3300, driverCargoLb: 200, tankGallons: 14.5, dragCoefficient: 0.32, frontalAreaM2: 2.2)
+        let csv = EngineLog.csv([EngineSample(time: 0, rpm: 900, speedKmh: 0, fuelPercent: 50),
+                                 EngineSample(time: 0.05, rpm: 900, speedKmh: 0)], vehicle: p)
+        XCTAssertEqual(csv, """
+        Time (msec),Engine Speed (RPM),Vehicle Speed (km/h),Fuel Level (%),Curb Weight (lbs),Driver + Cargo (lbs),Drag Coefficient,Frontal Area (m2)
+        0,900,0,50.0,3256,200,0.320,2.20
+        50,900,0,50.0,3256,200,0.320,2.20
+
+        """)
+        XCTAssertEqual(EngineLog.csv([EngineSample(time: 0, rpm: 900, speedKmh: 0)], vehicle: VehicleProfile()),
+                       "Time (msec),Engine Speed (RPM),Vehicle Speed (km/h)\n0,900,0\n")
+    }
+
+    func testFuelLevelPID() {
+        XCTAssertEqual(OBDPID.fuelLevel.decode([0x80]), 128 * 100 / 255, accuracy: 1e-9)
+        XCTAssertEqual(ELM327.parse("412F80\r>")[.fuelLevel]!, 128 * 100 / 255, accuracy: 1e-9)
+    }
+}

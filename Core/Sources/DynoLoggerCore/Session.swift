@@ -23,10 +23,12 @@ public struct SessionSummary: Codable, Equatable, Sendable {
     public var weather: [WeatherSnapshot]
     /// Whether the iPhone's barometer was recorded.
     public var phoneBarometer: Bool
+    /// The vehicle profile typed in the app for this vehicle, as it was when the run was recorded.
+    public var vehicleProfile: VehicleProfile?
 
     public init(vehicle: String, start: Date, end: Date, engineRows: Int, trackPoints: Int, trackSource: String?,
                 obdAdapter: String?, pedalSource: PedalSource?, goProRecorded: Bool,
-                weather: [WeatherSnapshot] = [], phoneBarometer: Bool = false) {
+                weather: [WeatherSnapshot] = [], phoneBarometer: Bool = false, vehicleProfile: VehicleProfile? = nil) {
         self.vehicle = vehicle
         self.start = start
         self.end = end
@@ -38,6 +40,7 @@ public struct SessionSummary: Codable, Equatable, Sendable {
         self.goProRecorded = goProRecorded
         self.weather = weather
         self.phoneBarometer = phoneBarometer
+        self.vehicleProfile = vehicleProfile
     }
 
     // session.json files written by 1.0 have neither key.
@@ -54,6 +57,7 @@ public struct SessionSummary: Codable, Equatable, Sendable {
         goProRecorded = try c.decode(Bool.self, forKey: .goProRecorded)
         weather = try c.decodeIfPresent([WeatherSnapshot].self, forKey: .weather) ?? []
         phoneBarometer = try c.decodeIfPresent(Bool.self, forKey: .phoneBarometer) ?? false
+        vehicleProfile = try c.decodeIfPresent(VehicleProfile.self, forKey: .vehicleProfile)
     }
 }
 
@@ -75,7 +79,8 @@ public enum SessionFiles {
         let dir = root.appendingPathComponent(name, isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         if !engine.isEmpty {
-            try EngineLog.csv(engine, pedalSource: summary.pedalSource ?? .pedal, weather: summary.weather, start: summary.start)
+            try EngineLog.csv(engine, pedalSource: summary.pedalSource ?? .pedal, weather: summary.weather, start: summary.start,
+                              vehicle: summary.vehicleProfile)
                 .write(to: dir.appendingPathComponent(name + ".csv"), atomically: true, encoding: .utf8)
         }
         if !track.isEmpty {

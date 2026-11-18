@@ -11,6 +11,7 @@ struct RecordView: View {
     @AppStorage("useGoPro") private var useGoPro = true
     @AppStorage("fetchWeather") private var fetchWeather = true
     @FocusState private var editingVehicle: Bool
+    @State private var editingProfile = false
 
     var body: some View {
         TerminalScreen(path: "logger", command: "./dyno-logger",
@@ -26,7 +27,11 @@ struct RecordView: View {
                     .disabled(recorder.isRecording)
                 Text("Names the files, like the dyno's Print image: GolfR_2026-11-18_170503.csv")
                     .font(.vtCaption).foregroundStyle(Phosphor.mut)
+                Button { editingProfile = true } label: { Text(profileText) }
+                    .buttonStyle(BracketButtonStyle())
+                    .disabled(recorder.isRecording)
             }
+            .sheet(isPresented: $editingProfile) { VehicleProfileView(vehicle: vehicle) }
 
             StatTile(title: "Engine Speed", value: obd.latest[.engineRPM].map { $0.formatted(.number.precision(.fractionLength(0))) },
                      unit: "RPM", color: Phosphor.fg, size: 78)
@@ -111,6 +116,14 @@ struct RecordView: View {
         case .streaming: return obd.name + ", " + String(format: "%.0f/s", obd.rate)
         case .failed(let why): return why
         }
+    }
+
+    private var profileText: String {
+        guard !editingProfile, let p = VehicleProfiles.profile(for: vehicle) else { return "Weight & drag" }
+        var parts: [String] = []
+        if let w = p.curbWeightLb { parts.append("\(Int(w + (p.driverCargoLb ?? 0))) lb") }
+        if let c = p.dragCoefficient { parts.append(String(format: "Cd %.2f", c)) }
+        return parts.isEmpty ? "Weight & drag" : "Weight & drag: " + parts.joined(separator: ", ")
     }
 
     private var baroText: String {
