@@ -20,9 +20,9 @@ targets:
       - package: DynoLoggerCore
     settings:
       base:
-        # Your Apple Developer Team ID (10 characters, developer.apple.com > Account > Membership details).
-        # Put it here rather than in Xcode's Signing tab: running xcodegen again rewrites the project and would lose it.
-        DEVELOPMENT_TEAM: ""
+        # Apple Developer Team ID (developer.apple.com > Account > Membership details). It lives here rather than in
+        # Xcode's Signing tab because running xcodegen again rewrites the project and would lose it.
+        DEVELOPMENT_TEAM: B498434AC9
         CODE_SIGN_STYLE: Automatic
         PRODUCT_BUNDLE_IDENTIFIER: com.itschefff.virtualdynologger
         MARKETING_VERSION: "1.0"

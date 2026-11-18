@@ -1,13 +1,12 @@
 # App Store submission notes
 
-Everything App Store Connect asks for that is not in the code. The app itself is ready to archive once your Team ID is in
-`project.yml` (`DEVELOPMENT_TEAM`).
+Everything App Store Connect asks for that is not in the code. The Team ID is set in `project.yml` (`DEVELOPMENT_TEAM`), so the app is ready to archive.
 
 ## Build and upload
 
 ```
 brew install xcodegen
-xcodegen                      # after setting DEVELOPMENT_TEAM in project.yml
+xcodegen
 open DynoLogger.xcodeproj
 ```
 

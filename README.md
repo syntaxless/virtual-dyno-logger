@@ -65,7 +65,6 @@ Launch with `-demo` for made-up devices and a simulated pull on a loop (the Simu
 
 ```
 brew install xcodegen
-# put your Team ID in project.yml (DEVELOPMENT_TEAM) first
 xcodegen                     # writes DynoLogger.xcodeproj from project.yml
 open DynoLogger.xcodeproj    # run on an iPhone (Bluetooth needs a real device)
 swift test --package-path Core
