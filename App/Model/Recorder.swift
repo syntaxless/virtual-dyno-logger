@@ -20,6 +20,9 @@ final class Recorder: ObservableObject {
     enum WeatherState: Equatable { case off, waitingForFix, fetching, got, failed }
 
     let barometer = PhoneBarometer()
+    /// The guided run: which steps are done and what to do next, worked out from the run so far every second.
+    @Published private(set) var guide = RunGuide(pulls: [], coasts: [])
+    private var guideTask: Task<Void, Never>?
 
     private let ble: BLEManager
     private let phoneGPS: PhoneGPS
@@ -41,7 +44,7 @@ final class Recorder: ObservableObject {
     }
 
     /// fetchWeather: the "Fetch the weather for each run" switch on the Record screen (on by default).
-    func start(vehicle: String, useGoPro: Bool, fetchWeather: Bool = true) {
+    func start(vehicle: String, useGoPro: Bool, fetchWeather: Bool = true, guideCoasts: Bool = true) {
         guard !isRecording else { return }
         engine = []
         externalTrack = []
@@ -58,6 +61,14 @@ final class Recorder: ObservableObject {
         startWeather = fetchWeather && !Demo.isOn ? fetchWeatherHere() : nil
         usedGoPro = useGoPro && ble.goPro.ready
         if usedGoPro { ble.goPro.setRecording(true) }
+        guide = RunGuide(pulls: [], coasts: [], wantCoasts: guideCoasts)
+        guideTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard let self, self.isRecording else { return }
+                self.updateGuide()
+            }
+        }
         UserDefaults.standard.set(vehicle, forKey: "vehicle")
     }
 
@@ -66,6 +77,8 @@ final class Recorder: ObservableObject {
         isRecording = false
         UIApplication.shared.isIdleTimerDisabled = false
         barometer.stop()
+        guideTask?.cancel()
+        updateGuide()
         if usedGoPro { ble.goPro.setRecording(false) }
         let first = startWeather, last = first == nil ? nil : fetchWeatherHere()
         startWeather = nil
@@ -131,6 +144,19 @@ final class Recorder: ObservableObject {
         guard isRecording else { return }
         phoneTrack.append(withBarometer(p))
         if externalTrack.isEmpty { trackPoints = phoneTrack.count }
+    }
+
+    private func updateGuide() {
+        guard let start = startedAt else { return }
+        let scale = PedalScale(engine.compactMap(\.pedalRaw))
+        let track = externalTrack.isEmpty ? phoneTrack : externalTrack
+        // Drag over mass for the brake check, from the vehicle profile when there is one (else a 3,500 lb car).
+        let p = VehicleProfiles.profile(for: UserDefaults.standard.string(forKey: "vehicle") ?? "")
+        let kg = ((p?.curbWeightLb ?? 3300) + (p?.driverCargoLb ?? 200)) * 0.45359237
+        let kap = 0.5 * 1.2 * (p?.dragCoefficient ?? 0.32) * (p?.frontalAreaM2 ?? 2.2) / kg
+        guide = RunGuide(pulls: RunCheck.pulls(engine, scale: scale),
+                         coasts: RunCheck.coasts(engine, scale: scale, track: track, start: start, kap: kap),
+                         wantCoasts: guide.wantCoasts)
     }
 
     private func withBarometer(_ p: TrackPoint) -> TrackPoint {

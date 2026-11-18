@@ -61,9 +61,21 @@ Other GPX readers skip them.
 
 ## Recording a pull
 
-Connect the devices on the Devices tab (they reconnect on their own after that), type the vehicle name, press record.
-Floor it in one gear from low RPM to redline on a flat, straight road, then stop recording. A coast in neutral or with
-the clutch in from about 70 to 30 MPH in the same run lets the dyno fit rolling resistance.
+Connect the devices you have on the Devices tab (they reconnect on their own after that), type the vehicle name, and
+fill in **Weight & drag** once. **What the Dyno Gets** on the Record screen shows which of the dyno's fields this setup
+fills and from what; anything missing is typed in the dyno.
+
+Press Start Run and follow **Guided Run**:
+
+1. Coast 1: on a flat, straight road, from 70 MPH or more, clutch in (or neutral), coast to 30 MPH without braking.
+2. Coast 2: turn around and coast the same stretch the other way. The pair cancels the hill and the wind, so the dyno
+   can fit drag as well as rolling resistance.
+3. Pull: in one gear, floor it from about 2,500 RPM to redline.
+
+Each step is checked as you drive with the same rules the dyno uses (`RunCheck` in Core is a port of its
+`findCoasts()`): a coast in gear, one cut short by the brakes, a pull that changed gear, and two coasts that are not
+opposite ways on the same stretch are each called out with what to fix. The coasts can be switched off for a plain
+pull.
 
 How fast the OBD log is depends on the car: CAN cars (2008 and later) answer all four fast PIDs in one request and
 give roughly 10-25 rows a second through a good adapter; older protocols are much slower.

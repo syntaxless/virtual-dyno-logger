@@ -294,3 +294,93 @@ final class VehicleProfileTests: XCTestCase {
         XCTAssertEqual(ELM327.parse("412F80\r>")[.fuelLevel]!, 128 * 100 / 255, accuracy: 1e-9)
     }
 }
+
+final class RunCheckTests: XCTestCase {
+    /// A run at 20 Hz: cruise at 75 MPH, coast with the clutch in (or in gear) to 30 MPH, cruise back up, and a 4th-gear pull.
+    /// heading: 90 (east) or 270 (west) for the GPS track. brakeAt: seconds into the coast when hard braking starts.
+    private func run(t0: Double = 0, heading: Double = 90, clutch: Bool = true, coastTo: Double = 30, brakeAt: Double? = nil,
+                     pull: Bool = true, shift: Bool = false) -> (engine: [EngineSample], track: [TrackPoint]) {
+        let mph = RunCheck.mph, k = 2400 / (50 * mph)   // RPM per m/s in the coasting gear
+        var e: [EngineSample] = [], tr: [TrackPoint] = []
+        var t = t0, v = 75 * mph, x = 0.0
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        func add(_ rpm: Double, _ pedal: Double) {
+            e.append(EngineSample(time: t, rpm: rpm, speedKmh: (v * 3.6).rounded(), pedalRaw: pedal))
+            let dir = heading == 90 ? 1.0 : -1.0
+            tr.append(TrackPoint(time: start.addingTimeInterval(t), latitude: 39.74, longitude: -104.98 + dir * x / 85_000 + (dir < 0 ? 0.03 : 0)))
+            t += 0.05
+        }
+        for _ in 0..<60 { add(k * v, 20); x += v * 0.05 }                       // 3 s cruise
+        let lift = t, rpm0 = k * v
+        while v > coastTo * mph {                                                // the coast
+            let el = t - lift
+            let rpm = clutch ? 850 + (rpm0 - 850) * exp(-max(0, el - 0.15) / 0.8) : k * v
+            add(rpm, 15)
+            let brake = brakeAt.map { el > $0 } ?? false
+            v -= 0.05 * (0.000264 * v * v + 0.012 * 9.81 + (clutch ? 0 : 0.35) + (brake ? 3 : 0))
+            x += v * 0.05
+        }
+        for _ in 0..<40 { add(k * v, 20) }                                       // back in gear
+        if pull {
+            var r = 2500.0, ratio = 2400 / (50 * mph) * 0.75, shifted = false
+            v = r / ratio
+            while r < 6800 {
+                if shift && !shifted && r > 4500 { ratio *= 0.8; r = v * ratio; shifted = true }
+                add(r, 80)
+                v += 0.05 * 2.5; r = v * ratio
+            }
+            for _ in 0..<40 { add(v * ratio, 15); v -= 0.05 }
+        }
+        return (e, tr)
+    }
+
+    func testCleanCoastAndPull() {
+        let (e, tr) = run()
+        let sc = PedalScale(e.compactMap(\.pedalRaw))
+        let c = RunCheck.coasts(e, scale: sc, track: tr, start: Date(timeIntervalSince1970: 1_800_000_000))
+        XCTAssertEqual(c.count, 1)
+        XCTAssertEqual(c.first?.status, .good)
+        XCTAssertGreaterThan(c.first!.fromMPH, 65)
+        XCTAssertLessThan(c.first!.toMPH, 35)
+        XCTAssertEqual(c.first!.heading!, 90, accuracy: 2)
+        let p = RunCheck.pulls(e, scale: sc)
+        XCTAssertEqual(p.count, 1)
+        XCTAssertTrue(p[0].good, "\(p[0])")
+    }
+
+    func testCoastInGearShortAndBraking() {
+        var (e, _) = run(clutch: false, pull: false)
+        var sc = PedalScale(low: 15, high: 80)
+        XCTAssertEqual(RunCheck.coasts(e, scale: sc).first?.status, .inGear)
+        (e, _) = run(coastTo: 60, pull: false)
+        sc = PedalScale(low: 15, high: 80)
+        XCTAssertEqual(RunCheck.coasts(e, scale: sc).first?.status, .short)
+        (e, _) = run(brakeAt: 12, pull: false)
+        let braked = RunCheck.coasts(e, scale: sc)
+        XCTAssertEqual(braked.first?.status, .short)       // cut at the brakes, so it is too short
+        XCTAssertLessThan(braked.first!.duration, 13)
+    }
+
+    func testShiftInThePull() {
+        let (e, _) = run(shift: true)
+        let p = RunCheck.pulls(e, scale: PedalScale(low: 15, high: 80))
+        XCTAssertFalse(p.isEmpty)
+        XCTAssertFalse(p[0].oneGear)
+        XCTAssertFalse(p[0].good)
+    }
+
+    func testGuideAsksForTheOtherDirection() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let a = run(heading: 90, pull: false)
+        var g = RunGuide(pulls: [], coasts: RunCheck.coasts(a.engine, scale: PedalScale(low: 15, high: 80), track: a.track, start: start))
+        XCTAssertEqual(g.next, .coastTwo)
+        XCTAssertTrue(g.prompt.hasPrefix("Coast 2"))
+        let b = run(t0: 200, heading: 270)
+        let e = a.engine + b.engine, tr = a.track + b.track, sc = PedalScale(e.compactMap(\.pedalRaw))
+        g = RunGuide(pulls: RunCheck.pulls(e, scale: sc), coasts: RunCheck.coasts(e, scale: sc, track: tr, start: start))
+        XCTAssertTrue(g.hasPair)
+        XCTAssertNil(g.next)
+        XCTAssertEqual(RunGuide(pulls: [], coasts: [], wantCoasts: false).next, .pull)
+        XCTAssertEqual(RunCheck.bearing(0, 0, 0, 1), 90, accuracy: 1e-6)
+    }
+}
