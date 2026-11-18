@@ -14,13 +14,22 @@ mkdir -p "$OUT"
 
 [ -d DynoLogger.xcodeproj ] || xcodegen
 xcodebuild -quiet -project DynoLogger.xcodeproj -scheme DynoLogger -configuration Debug \
-  -destination "platform=iOS Simulator,name=$DEVICE" -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
+  -destination 'generic/platform=iOS Simulator' -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
 APP=build/Build/Products/Debug-iphonesimulator/DynoLogger.app
 
+# The simulator called $DEVICE, or a new one of that model on the newest installed iOS runtime.
 UDID=$(xcrun simctl list devices available -j | python3 -c "
 import json, sys
 d = json.load(sys.stdin)['devices']
-print(next(x['udid'] for r in d.values() for x in r if x['name'] == sys.argv[1]))" "$DEVICE")
+print(next((x['udid'] for k, r in d.items() if 'iOS' in k for x in r if x['name'] == sys.argv[1]), ''))" "$DEVICE")
+if [ -z "$UDID" ]; then
+  RUNTIME=$(xcrun simctl list runtimes available -j | python3 -c "
+import json, sys
+r = [x for x in json.load(sys.stdin)['runtimes'] if x['platform'] == 'iOS']
+print(max(r, key=lambda x: [int(p) for p in x['version'].split('.')])['identifier'] if r else '')")
+  [ -n "$RUNTIME" ] || { echo "No iOS Simulator runtime installed (Xcode > Settings > Components)"; exit 1; }
+  UDID=$(xcrun simctl create "$DEVICE" "com.apple.CoreSimulator.SimDeviceType.${DEVICE// /-}" "$RUNTIME")
+fi
 xcrun simctl boot "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b >/dev/null
 xcrun simctl ui "$UDID" appearance dark
