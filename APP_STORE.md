@@ -24,7 +24,8 @@ archive), SKU anything, e.g. `virtualdynologger`.
 | Field | Value |
 | --- | --- |
 | Name | Virtual Dyno Logger |
-| Subtitle (30 max) | OBD-II + GPS logs for your dyno |
+| Subtitle (30 max) | Log OBD + GPS for Virtual Dyno |
+| Promotional text | Record a dyno pull from your OBD-II adapter, RaceBox and GoPro at once, then load the files straight into the free Virtual Dyno for horsepower and torque curves. |
 | Category | Utilities (secondary: Navigation, or none) |
 | Age rating | 4+ (answer "None" to everything) |
 | Price | Free |
@@ -78,8 +79,8 @@ Paste into App Review Information > Notes. No sign-in is needed.
 > indicator shows), and "bluetooth-central" keeps the OBD-II and GPS connections streaming. Recording only happens
 > between Start Run and Stop Run. Location permission is "While Using the App" only.
 >
-> Without the hardware the app shows empty screens. To see it with simulated devices and data, launch it with the
-> argument `-demo` (Xcode scheme). A demo video is attached / available at <add a link if you record one>.
+> Without the hardware, the Record screen still shows the iPhone's own GPS, and a run can be recorded and saved with
+> GPS only. A video of the app working with an OBD-II adapter is attached.
 
 Reviewers often ask for a video of the app working with real hardware when Bluetooth accessories are needed. A short
 screen recording of a real run with the adapter connected (from Control Center > Screen Recording) avoids a round trip.
