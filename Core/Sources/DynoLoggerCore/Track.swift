@@ -13,9 +13,15 @@ public struct TrackPoint: Equatable, Sendable {
     public var course: Double?
     public var satellites: Int?
     public var hdop: Double?
+    /// The iPhone's barometric altitude change since the run started (CMAltimeter), metres. GPS elevation wanders by
+    /// metres; this moves in steps of about 10 cm, so it gives a much cleaner road grade over a pull or a coast.
+    public var relativeAltitude: Double?
+    /// The iPhone's barometer, hPa.
+    public var pressure: Double?
 
     public init(time: Date, latitude: Double, longitude: Double, altitude: Double? = nil, speed: Double? = nil,
-                course: Double? = nil, satellites: Int? = nil, hdop: Double? = nil) {
+                course: Double? = nil, satellites: Int? = nil, hdop: Double? = nil,
+                relativeAltitude: Double? = nil, pressure: Double? = nil) {
         self.time = time
         self.latitude = latitude
         self.longitude = longitude
@@ -24,6 +30,8 @@ public struct TrackPoint: Equatable, Sendable {
         self.course = course
         self.satellites = satellites
         self.hdop = hdop
+        self.relativeAltitude = relativeAltitude
+        self.pressure = pressure
     }
 }
 
@@ -32,11 +40,16 @@ public struct TrackPoint: Equatable, Sendable {
 /// `<trkpt>`, and both readers look for a plain `<speed>` tag: the dyno uses that GPS speed directly when the track is
 /// 5 Hz or faster, and works speed out from positions otherwise. Each point needs a time; the dyno also uses `<ele>`
 /// for road grade and density altitude, and lat/lon for heading and the weather lookup.
+///
+/// The iPhone's barometer goes in two extra elements in the app's own namespace, which GPX 1.0 allows anywhere and
+/// other readers skip: `<dl:relalt>` (metres since the run started, for road grade) and `<dl:pressure>` (hPa).
 public enum GPX {
+    public static let namespace = "https://dynologger.turboloser.co/gpx/1"
+
     public static func document(_ points: [TrackPoint], name: String, creator: String = "Virtual Dyno Logger") -> String {
         var out = """
         <?xml version="1.0" encoding="UTF-8"?>
-        <gpx version="1.0" creator="\(escape(creator))" xmlns="http://www.topografix.com/GPX/1/0">
+        <gpx version="1.0" creator="\(escape(creator))" xmlns="http://www.topografix.com/GPX/1/0" xmlns:dl="\(namespace)">
         <trk><name>\(escape(name))</name><trkseg>
 
         """
@@ -51,6 +64,8 @@ public enum GPX {
             if let s = p.speed, s.isFinite, s >= 0 { out += "<speed>\(fmt(s, 3))</speed>" }
             if let n = p.satellites { out += "<sat>\(n)</sat>" }
             if let h = p.hdop, h.isFinite { out += "<hdop>\(fmt(h, 2))</hdop>" }
+            if let r = p.relativeAltitude, r.isFinite { out += "<dl:relalt>\(fmt(r, 2))</dl:relalt>" }
+            if let b = p.pressure, b.isFinite { out += "<dl:pressure>\(fmt(b, 2))</dl:pressure>" }
             out += "</trkpt>\n"
         }
         out += "</trkseg></trk>\n</gpx>\n"

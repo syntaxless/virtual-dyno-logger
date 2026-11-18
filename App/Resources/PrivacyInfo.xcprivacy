@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Privacy manifest. The app has no accounts, analytics, ads or tracking, and sends nothing off the phone: runs are
-  written to the app's Documents folder and leave it only when the person shares a file themselves. So it collects
-  no data types (Apple counts data as "collected" only when it is sent off the device) and does no tracking.
+  Privacy manifest. The app has no accounts, analytics, ads or tracking. Runs are written to the app's Documents
+  folder and leave it only when the person shares a file themselves. Since 1.1 it sends one thing off the phone: to
+  fetch the weather for a run (a switch on the Record screen, on by default) it sends the location rounded to 0.01
+  degree (about 1 km) to Open-Meteo, at the start and end of a run. That is declared as Coarse Location, for App
+  Functionality, not linked to the person and not used for tracking.
   Required-reason APIs: UserDefaults (vehicle name, GoPro toggle, remembered Bluetooth devices), reason CA92.1
   (read and written by the app itself only). Add an entry here if the app starts using another required-reason API
   (file timestamps, system boot time, disk space, active keyboards).
@@ -15,7 +17,20 @@
 	<key>NSPrivacyTrackingDomains</key>
 	<array/>
 	<key>NSPrivacyCollectedDataTypes</key>
-	<array/>
+	<array>
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeCoarseLocation</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
 		<dict>

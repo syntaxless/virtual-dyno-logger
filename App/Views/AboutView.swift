@@ -25,7 +25,9 @@ struct AboutView: View {
                 }
 
                 Panel(title: "Privacy") {
-                    Text("No account, no ads, no analytics. Your runs stay on this iPhone until you share a file yourself.")
+                    Text("No account, no ads, no analytics. Your runs stay on this iPhone until you share a file yourself. "
+                         + "To fetch the weather for a run, your location rounded to about 1 km goes to Open-Meteo.com; "
+                         + "you can turn that off on the Record screen.")
                         .foregroundStyle(Phosphor.mut)
                     Link(destination: Self.privacy) { Text("Privacy Policy") }.buttonStyle(BracketButtonStyle())
                 }

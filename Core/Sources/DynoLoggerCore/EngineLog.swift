@@ -14,9 +14,15 @@ public struct EngineSample: Equatable, Sendable {
     public var baroKPa: Double?
     /// Ambient air temperature (PID 0x46), Celsius.
     public var ambientC: Double?
+    /// The iPhone's own barometer (CMAltimeter), kPa. Cabin pressure, which is within a few hundredths of a psi of the
+    /// air outside with the windows up.
+    public var phoneBaroKPa: Double?
+    /// Fuel tank level (PID 0x2F), %.
+    public var fuelPercent: Double?
 
     public init(time: TimeInterval, rpm: Double, speedKmh: Double, pedalRaw: Double? = nil,
-                mapKPa: Double? = nil, baroKPa: Double? = nil, ambientC: Double? = nil) {
+                mapKPa: Double? = nil, baroKPa: Double? = nil, ambientC: Double? = nil, phoneBaroKPa: Double? = nil,
+                fuelPercent: Double? = nil) {
         self.time = time
         self.rpm = rpm
         self.speedKmh = speedKmh
@@ -24,6 +30,8 @@ public struct EngineSample: Equatable, Sendable {
         self.mapKPa = mapKPa
         self.baroKPa = baroKPa
         self.ambientC = ambientC
+        self.phoneBaroKPa = phoneBaroKPa
+        self.fuelPercent = fuelPercent
     }
 }
 
@@ -41,41 +49,90 @@ public enum PedalSource: String, Codable, Sendable {
 ///   counts a pull when the pedal is at or above its "Throttle Position >=" field (90 by default), and OBD pedal
 ///   sensors usually rest near 15 % and top out near 80 %;
 /// - optional "Ambient Air Temp (F)", "Ambient Pressure (psi)" and "Boost Press. (psi)" (gauge), which fill the
-///   air temperature, density altitude and Peak Boost Pressure tile.
+///   air temperature, density altitude and Peak Boost Pressure tile. Ambient Pressure is the car's barometric sensor;
+///   when the car does not report one, it is the iPhone's barometer instead.
+///
+/// After those, columns the dyno can choose from (their names avoid "ambient", "baro", "speed" first and "time", so
+/// the dyno's own column matching above never picks them by mistake):
+/// - "Phone Pressure (psi)": the iPhone's barometer, always, so the dyno can compare it with the car's;
+/// - "Weather Humidity (%)", "Weather Wind (MPH)", "Weather Wind From (deg)", "Weather Air Temp (F)",
+///   "Weather Sea-Level Pressure (hPa)": Open-Meteo's current conditions where the phone was, from the snapshot
+///   nearest in time to each row (one is taken at the start of the run and one at the end);
+/// - "Fuel Level (%)" from the car, and the vehicle profile typed in the app: "Curb Weight (lbs)" (the typed curb
+///   weight, which is with a full tank, less the fuel that is not in the tank at that row), "Driver + Cargo (lbs)",
+///   "Drag Coefficient" and "Frontal Area (m2)". The first two are the dyno's own field names.
 public enum EngineLog {
     public static let psiPerKPa = 1 / 6.89476
     static let standardBaroKPa = 101.325
 
-    public static func csv(_ samples: [EngineSample], pedalSource: PedalSource = .pedal) -> String {
+    public static func csv(_ samples: [EngineSample], pedalSource: PedalSource = .pedal,
+                           weather: [WeatherSnapshot] = [], start: Date? = nil, vehicle: VehicleProfile? = nil) -> String {
         let hasPedal = samples.contains { $0.pedalRaw != nil }
         let hasMAP = samples.contains { $0.mapKPa != nil }
         let hasBaro = samples.contains { $0.baroKPa != nil }
         let hasAmbient = samples.contains { $0.ambientC != nil }
+        let hasPhoneBaro = samples.contains { $0.phoneBaroKPa != nil }
+        let wx = start == nil ? [] : weather.sorted { $0.time < $1.time }
+        let wxCols: [(String, (WeatherSnapshot) -> String?)] = [
+            ("Weather Humidity (%)", { $0.humidity.map { fmt($0, 0) } }),
+            ("Weather Wind (MPH)", { $0.windSpeedMPH.map { fmt($0, 1) } }),
+            ("Weather Wind From (deg)", { $0.windFromDeg.map { fmt($0, 0) } }),
+            ("Weather Air Temp (F)", { $0.temperatureC.map { fmt($0 * 9 / 5 + 32, 1) } }),
+            ("Weather Sea-Level Pressure (hPa)", { $0.pressureMSLhPa.map { fmt($0, 1) } }),
+        ].filter { col in wx.contains { col.1($0) != nil } }
         let pedal = PedalScale(samples.compactMap(\.pedalRaw))
 
         var header = ["Time (msec)", "Engine Speed (RPM)", "Vehicle Speed (km/h)"]
         if hasPedal { header.append(pedalSource == .pedal ? "Accel. Pedal Position (%)" : "Throttle Position (%)") }
         if hasAmbient { header.append("Ambient Air Temp (F)") }
-        if hasBaro { header.append("Ambient Pressure (psi)") }
+        if hasBaro || hasPhoneBaro { header.append("Ambient Pressure (psi)") }
         if hasMAP { header.append("Boost Press. (psi)") }
+        if hasPhoneBaro { header.append("Phone Pressure (psi)") }
+        header += wxCols.map(\.0)
+        let hasFuel = samples.contains { $0.fuelPercent != nil }
+        let vp = vehicle?.isEmpty == false ? vehicle : nil
+        if hasFuel { header.append("Fuel Level (%)") }
+        if vp?.curbWeightLb != nil { header.append("Curb Weight (lbs)") }
+        if vp?.driverCargoLb != nil { header.append("Driver + Cargo (lbs)") }
+        if vp?.dragCoefficient != nil { header.append("Drag Coefficient") }
+        if vp?.frontalAreaM2 != nil { header.append("Frontal Area (m2)") }
 
         var lines = [header.joined(separator: ",")]
         var lastMs = Int.min
         // Ambient temperature and pressure are polled slowly, so the last reading is carried forward.
         var baro: Double?
         var ambient: Double?
+        var phone: Double?
+        var fuel: Double?
         for s in samples {
+            if let f = s.fuelPercent { fuel = f }
             if let b = s.baroKPa { baro = b }
             if let a = s.ambientC { ambient = a }
+            if let p = s.phoneBaroKPa { phone = p }
             let ms = Int((s.time * 1000).rounded())
             guard ms > lastMs, s.rpm.isFinite, s.speedKmh.isFinite else { continue }
             lastMs = ms
             var row = [String(ms), String(Int(s.rpm.rounded())), String(Int(s.speedKmh.rounded()))]
             if hasPedal { row.append(s.pedalRaw.map { fmt(pedal.apply($0), 1) } ?? "") }
             if hasAmbient { row.append(ambient.map { fmt($0 * 9 / 5 + 32, 1) } ?? "") }
+            // A car that reports baro at all keeps its own column; the phone fills it only for cars that never do.
             if hasBaro { row.append(baro.map { fmt($0 * psiPerKPa, 2) } ?? "") }
+            else if hasPhoneBaro { row.append(phone.map { fmt($0 * psiPerKPa, 2) } ?? "") }
             if hasMAP {
-                row.append(s.mapKPa.map { fmt(($0 - (baro ?? standardBaroKPa)) * psiPerKPa, 1) } ?? "")
+                row.append(s.mapKPa.map { fmt(($0 - (baro ?? phone ?? standardBaroKPa)) * psiPerKPa, 1) } ?? "")
+            }
+            if hasPhoneBaro { row.append(phone.map { fmt($0 * psiPerKPa, 3) } ?? "") }
+            if !wxCols.isEmpty, let start {
+                let t = start.addingTimeInterval(s.time)
+                let w = wx.min { abs($0.time.timeIntervalSince(t)) < abs($1.time.timeIntervalSince(t)) }!
+                row += wxCols.map { $0.1(w) ?? "" }
+            }
+            if hasFuel { row.append(fuel.map { fmt($0, 1) } ?? "") }
+            if let vp {
+                if vp.curbWeightLb != nil { row.append(vp.weightLb(fuelPercent: fuel).map { fmt($0, 0) } ?? "") }
+                if let d = vp.driverCargoLb { row.append(fmt(d, 0)) }
+                if let c = vp.dragCoefficient { row.append(fmt(c, 3)) }
+                if let a = vp.frontalAreaM2 { row.append(fmt(a, 2)) }
             }
             lines.append(row.joined(separator: ","))
         }

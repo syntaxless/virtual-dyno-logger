@@ -1,34 +1,33 @@
 name: CI
+# Branch pushes run through their pull request only (not twice), a newer push cancels the older run, and the Core
+# tests run on Linux. Actions is free while the repo is public; if it goes private again, macOS bills at about ten
+# times the Linux rate (it used up the included compute in November 2026), so then limit `build` to main again.
+# Screenshots run only by hand (Actions, CI, Run workflow, tick screenshots).
 on:
   push:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**']
   pull_request:
+    paths-ignore: ['**.md', 'docs/**']
+  workflow_dispatch:
+    inputs:
+      screenshots:
+        description: Also take the App Store screenshots
+        type: boolean
+        default: false
+concurrency:
+  # A new push cancels the run still going on the same branch.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
-  build:
-    runs-on: macos-15
+  core:
+    # DynoLoggerCore imports only Foundation, so its tests run on Linux.
+    runs-on: ubuntu-latest
+    container: swift:6.0
     steps:
       - uses: actions/checkout@v5
       - name: Core tests
         run: swift test --package-path Core
-      - name: Generate Xcode project
-        run: brew install xcodegen && xcodegen
-      - name: Build app (simulator, unsigned)
-        run: >
-          xcodebuild -project DynoLogger.xcodeproj -scheme DynoLogger
-          -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
-  screenshots:
-    # The App Store screenshots in screenshot mode, so the look can be checked from a PR. Download them from the run's
-    # artifacts. The final store screenshots are taken with the same script on a Mac.
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v5
-      - run: brew install xcodegen
-      - name: Screenshots (iPhone 16 Pro Max)
-        run: tools/screenshots.sh
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: screenshots
-          path: screenshots/
   dyno-format:
     runs-on: ubuntu-latest
     steps:
@@ -40,3 +39,29 @@ jobs:
       - run: pip install playwright && python -m playwright install --with-deps chromium
       - name: App output loads in the Virtual Dyno
         run: python tools/check_dyno.py virtual-dyno
+  build:
+    # The iOS app itself only builds on a Mac.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Generate Xcode project
+        run: brew install xcodegen && xcodegen
+      - name: Build app (simulator, unsigned)
+        run: >
+          xcodebuild -project DynoLogger.xcodeproj -scheme DynoLogger
+          -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+  screenshots:
+    # The App Store screenshots in screenshot mode. Run by hand (Actions, CI, Run workflow, tick screenshots) and
+    # download them from the run's artifacts. The final store screenshots are taken with the same script on a Mac.
+    runs-on: macos-15
+    if: github.event_name == 'workflow_dispatch' && inputs.screenshots
+    steps:
+      - uses: actions/checkout@v5
+      - run: brew install xcodegen
+      - name: Screenshots (iPhone 16 Pro Max)
+        run: tools/screenshots.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: screenshots/

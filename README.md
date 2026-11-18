@@ -9,6 +9,8 @@ the [Virtual Dyno](https://dyno.turboloser.co) reads.
 | RaceBox Mini / Mini S / Micro | CoreBluetooth, Nordic UART, RaceBox binary messages | 25 Hz GPS: position, speed, heading, altitude |
 | Any BLE GPS that sends NMEA over Nordic UART | CoreBluetooth | GPS at the receiver's rate |
 | The iPhone's own GPS | CoreLocation | about 1 Hz GPS (used when no external GPS is connected) |
+| The iPhone's barometer | CoreMotion (CMAltimeter) | air pressure, and altitude change in steps of about 10 cm for road grade |
+| Open-Meteo weather | HTTPS, at the start and end of a run (a switch on the Record screen) | humidity, wind, air temperature and sea-level pressure where the phone is |
 | GoPro HERO9 or later | Open GoPro BLE | starts and stops video with the run; sets the camera clock to the phone's so the video lines up with the logs |
 
 Dragy is listed but not supported: its Bluetooth protocol is not public. Export the run from the Dragy app and load its
@@ -38,13 +40,51 @@ Time (msec),Engine Speed (RPM),Vehicle Speed (km/h),Accel. Pedal Position (%),Am
 - Boost is gauge pressure: manifold pressure minus the logged barometric pressure.
 - Ambient temperature and pressure fill the dyno's air temperature and density altitude.
 
-The `.gpx` is GPX 1.0 so each point can carry `<speed>` (m/s), which both the dyno and video-overlay read.
+After those come columns the dyno can pick from (their names stay clear of the words the dyno's column matching
+looks for, so they never replace the columns above by mistake):
+
+- `Phone Pressure (psi)`: the iPhone's barometer. When the car reports no barometric pressure, `Ambient Pressure (psi)`
+  is filled from the phone too.
+- `Weather Humidity (%)`, `Weather Wind (MPH)`, `Weather Wind From (deg)`, `Weather Air Temp (F)`,
+  `Weather Sea-Level Pressure (hPa)`: Open-Meteo's current conditions where the phone was, from the snapshot nearest
+  each row (one at the start of the run and one at the end). Only the location rounded to 0.01 degree (about 1 km) is
+  sent. With no signal the run is saved without them, and the dyno can still look the weather up from the GPX.
+
+- `Fuel Level (%)` from the car (PID 0x2F), and the vehicle profile from **Weight & drag** on the Record screen:
+  `Curb Weight (lbs)` (the typed full-tank curb weight less the fuel missing at that row, 6.1 lb a gallon),
+  `Driver + Cargo (lbs)`, `Drag Coefficient` and `Frontal Area (m2)`. The dyno fills its fields of the same names.
+
+### Attaching an Accessport log
+
+A run logged with a Cobb Accessport as well can carry its log: on the Runs tab, open the run and use **Attach Accessport
+log**. The Accessport's file is kept as it is, every row and column, and the app's other columns (weather, barometer,
+fuel, weight, and ambient temperature or pressure when the Accessport lacks them) are appended, so the run still has one
+log for the dyno's log box. The two clocks are lined up by matching RPM against the OBD-II log (to about 0.05 s), or speed
+against the GPS track when there is no OBD-II log. The run's own OBD-II log is kept in `sources/` and comes back with
+**Take the Accessport log off**.
+
+The `.gpx` is GPX 1.0 so each point can carry `<speed>` (m/s), which both the dyno and video-overlay read. Each point
+also carries the phone's barometer in the app's own namespace (`xmlns:dl="https://dynologger.turboloser.co/gpx/1"`):
+`<dl:relalt>` is the altitude change since the run started in metres, for road grade, and `<dl:pressure>` is in hPa.
+Other GPX readers skip them.
 
 ## Recording a pull
 
-Connect the devices on the Devices tab (they reconnect on their own after that), type the vehicle name, press record.
-Floor it in one gear from low RPM to redline on a flat, straight road, then stop recording. A coast in neutral or with
-the clutch in from about 70 to 30 MPH in the same run lets the dyno fit rolling resistance.
+Connect the devices you have on the Devices tab (they reconnect on their own after that), type the vehicle name, and
+fill in **Weight & drag** once. **What the Dyno Gets** on the Record screen shows which of the dyno's fields this setup
+fills and from what; anything missing is typed in the dyno.
+
+Press Start Run and follow **Guided Run**:
+
+1. Coast 1: on a flat, straight road, from 70 MPH or more, clutch in (or neutral), coast to 30 MPH without braking.
+2. Coast 2: turn around and coast the same stretch the other way. The pair cancels the hill and the wind, so the dyno
+   can fit drag as well as rolling resistance.
+3. Pull: in one gear, floor it from about 2,500 RPM to redline.
+
+Each step is checked as you drive with the same rules the dyno uses (`RunCheck` in Core is a port of its
+`findCoasts()`): a coast in gear, one cut short by the brakes, a pull that changed gear, and two coasts that are not
+opposite ways on the same stretch are each called out with what to fix. The coasts can be switched off for a plain
+pull.
 
 How fast the OBD log is depends on the car: CAN cars (2008 and later) answer all four fast PIDs in one request and
 give roughly 10-25 rows a second through a good adapter; older protocols are much slower.
@@ -74,8 +114,9 @@ swift test --package-path Core
 decoders, GoPro commands) and its tests. `App/` is the SwiftUI app.
 
 `python tools/check_dyno.py <path to virtual-dyno>` simulates a session, writes it in the app's format and loads it
-into the dyno page in headless Chromium (needs `pip install playwright`). CI runs it, the Core tests and an
-unsigned simulator build.
+into the dyno page in headless Chromium (needs `pip install playwright`). CI runs it and the Core tests on Linux
+for every push and pull request. The unsigned simulator build runs on macOS for the same events. The App Store screenshots
+run only by hand (Actions, CI, Run workflow).
 
 ## Not verified yet
 
