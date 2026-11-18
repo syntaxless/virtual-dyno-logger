@@ -37,7 +37,8 @@ final class BLEManager: NSObject, ObservableObject {
 
     override init() {
         super.init()
-        central = CBCentralManager(delegate: self, queue: .main)
+        // Screenshot mode never touches Bluetooth (the Simulator has none, and it would ask for permission).
+        if !Demo.isOn { central = CBCentralManager(delegate: self, queue: .main) }
     }
 
     func startScan() {

@@ -14,7 +14,10 @@ struct DynoLoggerApp: App {
         _ble = StateObject(wrappedValue: ble)
         _phoneGPS = StateObject(wrappedValue: phoneGPS)
         _sessions = StateObject(wrappedValue: sessions)
-        _recorder = StateObject(wrappedValue: Recorder(ble: ble, phoneGPS: phoneGPS, sessions: sessions))
+        let recorder = Recorder(ble: ble, phoneGPS: phoneGPS, sessions: sessions)
+        _recorder = StateObject(wrappedValue: recorder)
+        Appearance.apply()
+        Demo.start(ble: ble, recorder: recorder, sessions: sessions)
     }
 
     var body: some Scene {
@@ -27,6 +30,7 @@ struct DynoLoggerApp: App {
                 .environmentObject(phoneGPS)
                 .environmentObject(sessions)
                 .environmentObject(recorder)
+                .preferredColorScheme(.dark)
         }
     }
 }

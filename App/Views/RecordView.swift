@@ -9,57 +9,77 @@ struct RecordView: View {
     @EnvironmentObject private var phoneGPS: PhoneGPS
     @AppStorage("vehicle") private var vehicle = ""
     @AppStorage("useGoPro") private var useGoPro = true
+    @FocusState private var editingVehicle: Bool
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    TextField("Vehicle name (e.g. Golf R)", text: $vehicle)
-                        .disabled(recorder.isRecording)
-                }
-                Section("Live") {
-                    HStack {
-                        gauge("RPM", obd.latest[.engineRPM].map { String(Int($0)) })
-                        gauge("MPH", speedMPH.map { String(format: "%.0f", $0) })
-                        gauge("Boost psi", boost.map { String(format: "%.1f", $0) })
-                    }
-                }
-                Section("Sources") {
-                    row("OBD-II", obdText, ok: obd.status == .streaming)
-                    row("GPS", gpsText, ok: gps.connected || phoneGPS.latest != nil)
-                    row("GoPro", goPro.ready ? (goPro.recording ? "Recording" : "Ready") : "Not connected", ok: goPro.ready)
-                    if goPro.ready { Toggle("Record video with each run", isOn: $useGoPro) }
-                }
-                Section {
-                    Button(action: toggle) {
-                        HStack {
-                            Spacer()
-                            Image(systemName: recorder.isRecording ? "stop.circle.fill" : "record.circle")
-                                .font(.system(size: 64))
-                                .foregroundStyle(recorder.isRecording ? Color.red : Color.green)
-                            Spacer()
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    if let start = recorder.startedAt, recorder.isRecording {
-                        TimelineView(.periodic(from: start, by: 1)) { ctx in
-                            Text("\(Duration.seconds(ctx.date.timeIntervalSince(start)).formatted(.time(pattern: .minuteSecond)))"
-                                 + "  ·  \(recorder.engineRows) OBD rows  ·  \(recorder.trackPoints) GPS points")
-                                .font(.footnote.monospacedDigit())
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                } footer: {
-                    Text("For a dyno pull: floor it in one gear from low RPM to redline on a flat, straight road. "
-                         + "A coast with the clutch in from 70 to 30 MPH lets the dyno measure rolling resistance.")
-                }
-                if let e = recorder.error { Text(e).foregroundStyle(.red) }
-                if let saved = recorder.lastSaved, !recorder.isRecording {
-                    Text("Saved \(saved.lastPathComponent). Open it from the Runs tab.").font(.footnote)
+        TerminalScreen(path: "logger", command: "./dyno-logger",
+                       status: recorder.isRecording ? "● REC" : "idle",
+                       statusColor: recorder.isRecording ? Color(hex: 0x8A1A10) : Phosphor.ink) {
+            Panel(title: "Vehicle") {
+                TextField("", text: $vehicle, prompt: Text("e.g. Golf R").foregroundColor(Phosphor.mut))
+                    .focused($editingVehicle)
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .terminalField(focused: editingVehicle)
+                    .disabled(recorder.isRecording)
+                Text("Names the files, like the dyno's Print image: GolfR_2026-11-18_170503.csv")
+                    .font(.vtCaption).foregroundStyle(Phosphor.mut)
+            }
+
+            StatTile(title: "Engine Speed", value: obd.latest[.engineRPM].map { $0.formatted(.number.precision(.fractionLength(0))) },
+                     unit: "RPM", color: Phosphor.fg, size: 78)
+            HStack(spacing: 12) {
+                StatTile(title: "Speed", value: speedMPH.map { String(format: "%.0f", $0) }, unit: "MPH", color: Phosphor.cyan)
+                StatTile(title: "Boost", value: boost.map { String(format: "%.1f", $0) }, unit: "PSI", color: Phosphor.pink)
+            }
+
+            Panel(title: "Sources") {
+                source("OBD-II", obdText, ok: obd.status == .streaming)
+                source("GPS", gpsText, ok: gps.connected || phoneGPS.latest != nil)
+                source("GoPro", goPro.ready ? (goPro.recording ? "Recording" : "Ready") : "Not connected", ok: goPro.ready,
+                       color: goPro.recording ? Phosphor.err : Phosphor.fg)
+                if goPro.ready {
+                    Toggle("Record video with each run", isOn: $useGoPro).toggleStyle(BracketToggleStyle())
                 }
             }
-            .navigationTitle("Dyno Logger")
+
+            recordButton
+
+            if let start = recorder.startedAt, recorder.isRecording {
+                TimelineView(.periodic(from: start, by: 1)) { ctx in
+                    PromptLine(text: Duration.seconds(ctx.date.timeIntervalSince(start)).formatted(.time(pattern: .minuteSecond))
+                               + "  ·  \(recorder.engineRows) OBD rows  ·  \(recorder.trackPoints) GPS points", color: Phosphor.amber)
+                        .monospacedDigit()
+                }
+            }
+            if let e = recorder.error { PromptLine(text: e, color: Phosphor.err) }
+            if let saved = recorder.lastSaved, !recorder.isRecording {
+                PromptLine(text: "Saved \(saved.lastPathComponent). Open it from the Runs tab.", color: Phosphor.amber)
+            }
+            PromptLine(text: "For a dyno pull: floor it in one gear from low RPM to redline on a flat, straight road. "
+                       + "A coast with the clutch in from 70 to 30 MPH lets the dyno measure rolling resistance.")
         }
+    }
+
+    private var recordButton: some View {
+        Button(action: toggle) {
+            HStack(spacing: 14) {
+                Image(systemName: recorder.isRecording ? "stop.fill" : "circle.fill")
+                    .font(.system(size: 26))
+                Text(recorder.isRecording ? "STOP RUN" : "START RUN")
+                    .font(.vt(40, relativeTo: .title))
+                    .tracking(2)
+            }
+            .frame(maxWidth: .infinity, minHeight: 76)
+            .foregroundStyle(recorder.isRecording ? Phosphor.err : Phosphor.fg)
+            .glow(recorder.isRecording ? Phosphor.err : Phosphor.fg, radius: 6, opacity: 0.7)
+            .background((recorder.isRecording ? Phosphor.err : Phosphor.fg).opacity(0.1))
+            .overlay(Rectangle().stroke(recorder.isRecording ? Phosphor.err : Phosphor.fg, lineWidth: 2))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(recorder.isRecording ? "Stop recording" : "Start recording")
     }
 
     private var speedMPH: Double? {
@@ -78,35 +98,30 @@ struct RecordView: View {
         case .disconnected: return "Not connected"
         case .connecting: return "Connecting"
         case .initializing: return "Talking to the car"
-        case .streaming: return String(format: "%.0f readings/s", obd.rate)
+        case .streaming: return obd.name + ", " + String(format: "%.0f/s", obd.rate)
         case .failed(let why): return why
         }
     }
 
     private var gpsText: String {
-        if gps.connected { return "\(gps.name), " + String(format: "%.0f Hz", gps.rate) + (gps.battery.map { ", battery \($0)%" } ?? "") }
-        if phoneGPS.latest != nil { return "iPhone, about 1 Hz" + (phoneGPS.accuracy.map { String(format: ", ±%.0f m", $0) } ?? "") }
+        if gps.connected { return "\(gps.name), " + String(format: "%.0f Hz", gps.rate) + (gps.battery.map { ", \($0)%" } ?? "") }
+        if phoneGPS.latest != nil { return "iPhone, 1 Hz" + (phoneGPS.accuracy.map { String(format: ", ±%.0f m", $0) } ?? "") }
         return "Waiting for a fix"
     }
 
     private func toggle() {
+        editingVehicle = false
         if recorder.isRecording { recorder.stop() } else { recorder.start(vehicle: vehicle, useGoPro: useGoPro) }
     }
 
-    private func gauge(_ label: String, _ value: String?) -> some View {
-        VStack {
-            Text(value ?? "–").font(.system(.title, design: .monospaced))
-            Text(label).font(.caption).foregroundStyle(.secondary)
+    private func source(_ title: String, _ detail: String, ok: Bool, color: Color = Phosphor.fg) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(ok ? "[ OK ]" : "[ -- ]").foregroundStyle(ok ? color : Phosphor.dim)
+            Text(title).foregroundStyle(Phosphor.hi).frame(width: 64, alignment: .leading)
+            Text(detail).foregroundStyle(ok ? Phosphor.mut : Phosphor.dim).font(.vtSmall)
+                .frame(maxWidth: .infinity, alignment: .trailing).multilineTextAlignment(.trailing)
         }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func row(_ title: String, _ detail: String, ok: Bool) -> some View {
-        HStack {
-            Image(systemName: ok ? "checkmark.circle.fill" : "circle").foregroundStyle(ok ? Color.green : Color.secondary)
-            Text(title)
-            Spacer()
-            Text(detail).foregroundStyle(.secondary).font(.footnote).multilineTextAlignment(.trailing)
-        }
+        .font(.vtBody)
+        .accessibilityElement(children: .combine)
     }
 }

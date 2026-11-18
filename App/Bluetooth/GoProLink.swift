@@ -42,6 +42,7 @@ final class GoProLink: NSObject, ObservableObject, PeripheralLink {
 
     func setRecording(_ on: Bool) {
         requested = on
+        if Demo.isOn, peripheral == nil { recording = on; return }
         write(GoPro.shutter(on), to: command)
     }
 
@@ -101,5 +102,13 @@ extension GoProLink: CBPeripheralDelegate {
         MainActor.assumeIsolated {
             if let v = characteristic.value { response([UInt8](v)) }
         }
+    }
+}
+
+// Screenshot mode (see Demo): a camera that is ready and follows the record button.
+extension GoProLink {
+    func demoConnect() {
+        name = "GoPro HERO12"
+        ready = true
     }
 }
