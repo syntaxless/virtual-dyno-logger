@@ -24,12 +24,6 @@ jobs:
       - run: brew install xcodegen
       - name: Screenshots (iPhone 16 Pro Max)
         run: tools/screenshots.sh
-      - name: Thumbnails in the log (temporary, for checking from a sandbox that cannot download artifacts)
-        run: |
-          for f in screenshots/*/*.png; do
-            sips -s format jpeg -s formatOptions 60 -Z 900 "$f" --out /tmp/t.jpg >/dev/null
-            echo "THUMB $(basename "$f") $(base64 -i /tmp/t.jpg | tr -d '\n')"
-          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
