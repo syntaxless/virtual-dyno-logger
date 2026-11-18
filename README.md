@@ -54,6 +54,15 @@ looks for, so they never replace the columns above by mistake):
   `Curb Weight (lbs)` (the typed full-tank curb weight less the fuel missing at that row, 6.1 lb a gallon),
   `Driver + Cargo (lbs)`, `Drag Coefficient` and `Frontal Area (m2)`. The dyno fills its fields of the same names.
 
+### Attaching an Accessport log
+
+A run logged with a Cobb Accessport as well can carry its log: on the Runs tab, open the run and use **Attach Accessport
+log**. The Accessport's file is kept as it is, every row and column, and the app's other columns (weather, barometer,
+fuel, weight, and ambient temperature or pressure when the Accessport lacks them) are appended, so the run still has one
+log for the dyno's log box. The two clocks are lined up by matching RPM against the OBD-II log (to about 0.05 s), or speed
+against the GPS track when there is no OBD-II log. The run's own OBD-II log is kept in `sources/` and comes back with
+**Take the Accessport log off**.
+
 The `.gpx` is GPX 1.0 so each point can carry `<speed>` (m/s), which both the dyno and video-overlay read. Each point
 also carries the phone's barometer in the app's own namespace (`xmlns:dl="https://dynologger.turboloser.co/gpx/1"`):
 `<dl:relalt>` is the altitude change since the run started in metres, for road grade, and `<dl:pressure>` is in hPa.

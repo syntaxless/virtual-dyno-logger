@@ -1,5 +1,6 @@
 import DynoLoggerCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SessionsView: View {
     @EnvironmentObject private var store: SessionStore
@@ -64,7 +65,12 @@ struct SessionDetail: View {
     @EnvironmentObject private var store: SessionStore
     @Environment(\.dismiss) private var dismiss
     @State private var confirmDelete = false
+    @State private var importing = false
+    @State private var attachMessage: String?
+    @State private var attachFailed = false
     let session: StoredSession
+
+    private var current: StoredSession { store.sessions.first { $0.id == session.id } ?? session }
 
     var body: some View {
         TerminalScreen(path: "logger/runs", command: "cd \(session.name)") {
@@ -77,6 +83,30 @@ struct SessionDetail: View {
                 }
                 Text("Share a file, or pick it from the Files app (On My iPhone > Dyno Logger > Sessions) in the dyno's upload box.")
                     .font(.vtCaption).foregroundStyle(Phosphor.mut)
+            }
+
+            Panel(title: "Accessport") {
+                if let a = current.summary?.accessport {
+                    Text("\(a.file) is merged into the log: its RPM, speed, pedal and boost, with this run's weather, barometer, "
+                         + "fuel and weight columns added. " + lineUp(a))
+                        .font(.vtSmall).foregroundStyle(Phosphor.mut)
+                    Button("Take the Accessport log off") {
+                        try? SessionFiles.detachAccessport(from: session.folder)
+                        store.reload()
+                        attachMessage = nil
+                    }
+                    .buttonStyle(BracketButtonStyle())
+                } else {
+                    Text("Logged this run with a Cobb Accessport too? Copy the log off it (Accessport Manager, or the AP's USB) "
+                         + "to Files, then attach it. Its boost is the car's own sensor, which OBD-II can't read past about 23 psi.")
+                        .font(.vtSmall).foregroundStyle(Phosphor.mut)
+                }
+                Button(current.summary?.accessport == nil ? "Attach Accessport log" : "Attach a different log") { importing = true }
+                    .buttonStyle(BracketButtonStyle())
+                if let m = attachMessage { PromptLine(text: m, color: attachFailed ? Phosphor.err : Phosphor.amber) }
+            }
+            .fileImporter(isPresented: $importing, allowedContentTypes: [.commaSeparatedText, .plainText, .data]) { result in
+                attach(result)
             }
 
             Link(destination: SessionsView.dyno) { Text("Open the Virtual Dyno") }
@@ -101,6 +131,38 @@ struct SessionDetail: View {
             Button("Delete", role: .destructive) { store.delete(session); dismiss() }
         } message: {
             Text("Its log, GPS track and details are removed from this iPhone.")
+        }
+    }
+
+    private func lineUp(_ a: SessionSummary.AttachedLog) -> String {
+        switch a.method {
+        case .rpm: return String(format: "Lined up with the OBD-II log by RPM (%+.2f s, within %.0f RPM on average).", a.offset, a.matchError ?? 0)
+        case .speed: return String(format: "Lined up with the GPS track by speed (%+.1f s).", a.offset)
+        case .start: return "Nothing to line it up with, so it is taken to start with the run."
+        }
+    }
+
+    private func attach(_ result: Result<URL, Error>) {
+        attachFailed = false
+        guard case .success(let url) = result else { return }
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let data = try Data(contentsOf: url)
+            let text = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
+            let r = try SessionFiles.attachAccessport(text, fileName: url.lastPathComponent, to: session.folder)
+            store.reload()
+            attachMessage = "Attached: \(r.rows) rows, \(r.added.count) columns added from this run."
+        } catch let e as AccessportMerge.MergeError {
+            attachFailed = true
+            switch e {
+            case .notAccessport: attachMessage = "That file has no Time and Engine Speed (RPM) columns. Pick the Accessport's .csv datalog."
+            case .tooShort: attachMessage = "That log is too short to use."
+            case .noMatch: attachMessage = "That log doesn't line up with this run's RPM or speed. Is it from the same drive?"
+            }
+        } catch {
+            attachFailed = true
+            attachMessage = "Could not read that file: \(error.localizedDescription)"
         }
     }
 

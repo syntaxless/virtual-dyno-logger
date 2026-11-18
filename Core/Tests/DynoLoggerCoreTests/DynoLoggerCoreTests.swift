@@ -384,3 +384,66 @@ final class RunCheckTests: XCTestCase {
         XCTAssertEqual(RunCheck.bearing(0, 0, 0, 1), 90, accuracy: 1e-6)
     }
 }
+
+final class AccessportMergeTests: XCTestCase {
+    private func rpm(_ t: Double) -> Double { 2500 + 900 * sin(t / 7) + 400 * sin(t / 2.3 + 1) + (t > 60 && t < 70 ? (t - 60) * 400 : 0) }
+    private func kmh(_ t: Double) -> Double { 80 + 20 * sin(t / 11) + 10 * sin(t / 3.7 + 2) }
+
+    /// An OBD log of 120 s at 10 Hz in the app's format, and an Accessport log at 15 Hz that started `lag` s into the run.
+    private func logs(lag: Double, apAmbient: Bool = false) -> (obd: String, ap: String) {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let samples = stride(from: 0.0, to: 120, by: 0.1).map { t in
+            EngineSample(time: t, rpm: rpm(t), speedKmh: kmh(t), pedalRaw: 20, mapKPa: 100, baroKPa: t < 1 ? 98 : nil,
+                         ambientC: t < 1 ? 21 : nil, phoneBaroKPa: 98.4 - t * 0.001, fuelPercent: t < 1 ? 50 : nil)
+        }
+        let wx = [WeatherSnapshot(time: start, latitude: 1, longitude: 2, temperatureC: 20, humidity: 45, windSpeedMPH: 5, windFromDeg: 90)]
+        let obd = EngineLog.csv(samples, weather: wx, start: start, vehicle: VehicleProfile(curbWeightLb: 3300, driverCargoLb: 200))
+        var ap = "Time (sec),Engine Speed (RPM),Vehicle Speed (mph),Accel. Pedal Position (%),Boost Press. (psi)"
+            + (apAmbient ? ",Ambient Air Temp (F)" : "") + "\n"
+        for t in stride(from: 0.0, to: 80, by: 1.0 / 15) {
+            let s = t + lag
+            ap += String(format: "%.3f,%.0f,%.0f,%.1f,%.1f", t, rpm(s), kmh(s) / 1.609344, 25.0, 24.6) + (apAmbient ? ",68.0" : "") + "\n"
+        }
+        return (obd, ap)
+    }
+
+    func testLinesUpOnRPMAndAppendsTheAppsColumns() throws {
+        let (obd, ap) = logs(lag: 23.4)
+        let r = try AccessportMerge.merge(accessport: ap, obdLog: obd)
+        XCTAssertEqual(r.method, .rpm)
+        XCTAssertEqual(r.offset, 23.4, accuracy: 0.06)
+        XCTAssertEqual(r.rows, 1200)
+        for h in ["Ambient Air Temp (F)", "Ambient Pressure (psi)", "Phone Pressure (psi)", "Weather Humidity (%)", "Fuel Level (%)",
+                  "Curb Weight (lbs)", "Driver + Cargo (lbs)"] {
+            XCTAssertTrue(r.added.contains(h), h)
+        }
+        for h in r.added { XCTAssertFalse(AccessportMerge.replaced(h), h) }
+        let lines = r.csv.split(separator: "\n")
+        XCTAssertTrue(lines[0].hasPrefix("Time (sec),Engine Speed (RPM),Vehicle Speed (mph),Accel. Pedal Position (%),Boost Press. (psi),"))
+        XCTAssertTrue(lines[1].hasPrefix("0.000,"))     // the Accessport's own rows, unchanged
+        XCTAssertTrue(lines[1].contains(",24.6,"))
+        XCTAssertTrue(lines[1].contains(",45,"))        // weather carried in
+        XCTAssertEqual(lines.count, 1201)
+    }
+
+    func testKeepsTheAccessportsOwnAmbientColumn() throws {
+        let (obd, ap) = logs(lag: 5, apAmbient: true)
+        let r = try AccessportMerge.merge(accessport: ap, obdLog: obd)
+        XCTAssertFalse(r.added.contains("Ambient Air Temp (F)"))
+        XCTAssertTrue(r.added.contains("Ambient Pressure (psi)"))
+    }
+
+    func testLinesUpOnGPSSpeedWithoutOBD() throws {
+        let (_, ap) = logs(lag: 41.0)
+        let track = stride(from: 0.0, to: 150, by: 0.2).map { (time: $0, speed: kmh($0) / 3.6) }
+        let r = try AccessportMerge.merge(accessport: ap, obdLog: nil, track: track)
+        XCTAssertEqual(r.method, .speed)
+        XCTAssertEqual(r.offset, 41.0, accuracy: 0.6)    // whole-MPH speed lines up less tightly than RPM
+    }
+
+    func testRejectsAFileThatIsNotALog() {
+        XCTAssertThrowsError(try AccessportMerge.merge(accessport: "a,b\n1,2\n", obdLog: nil)) {
+            XCTAssertEqual($0 as? AccessportMerge.MergeError, .notAccessport)
+        }
+    }
+}
