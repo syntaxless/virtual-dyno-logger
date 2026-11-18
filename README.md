@@ -114,8 +114,9 @@ swift test --package-path Core
 decoders, GoPro commands) and its tests. `App/` is the SwiftUI app.
 
 `python tools/check_dyno.py <path to virtual-dyno>` simulates a session, writes it in the app's format and loads it
-into the dyno page in headless Chromium (needs `pip install playwright`). CI runs it, the Core tests and an
-unsigned simulator build.
+into the dyno page in headless Chromium (needs `pip install playwright`). CI runs it and the Core tests on Linux
+for every push and pull request. The unsigned simulator build runs on macOS for the same events. The App Store screenshots
+run only by hand (Actions, CI, Run workflow).
 
 ## Not verified yet
 
