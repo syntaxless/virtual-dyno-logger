@@ -2,7 +2,22 @@
 
 Everything App Store Connect asks for that is not in the code. The Team ID is set in `project.yml` (`DEVELOPMENT_TEAM`), so the app is ready to archive.
 
-## Build and upload
+## Upload from GitHub (no Mac needed)
+
+The **TestFlight** workflow (`.github/workflows/testflight.yml`) archives, signs and uploads from GitHub's Macs. One-time
+setup, all doable on a phone:
+
+1. App Store Connect > Users and Access > Integrations > App Store Connect API > Team Keys > **+**. Name it
+   "GitHub", Access **Admin**, Generate. (Only the Account Holder can make the first key; accept the terms if asked.)
+2. Note the **Issuer ID** (above the list) and the new key's **Key ID**. Tap **Download** (it downloads once only).
+3. Files app > Downloads > touch and hold `AuthKey_<Key ID>.p8` > Rename to `AuthKey.txt` > open it > select all > Copy.
+4. github.com/syntaxless/virtual-dyno-logger > Settings > Secrets and variables > Actions > New repository secret,
+   three times: `ASC_KEY_P8` (paste the whole text), `ASC_KEY_ID`, `ASC_ISSUER_ID`.
+
+Then Actions > TestFlight > Run workflow (type the build number, 1 the first time; each upload needs a higher one).
+It takes about 10 minutes, and the build shows in TestFlight after Apple's processing.
+
+## Build and upload from a Mac
 
 ```
 brew install xcodegen
