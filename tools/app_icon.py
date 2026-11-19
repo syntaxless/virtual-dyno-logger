@@ -4,16 +4,16 @@
 
 It is the Virtual Dyno web app's own home-screen icon (syntaxless/virtual-dyno, tools/icons.py): the dyno chart as 8-bit pixel
 art on a 32x32 grid in the green phosphor palette, scaled 32x with nearest-neighbour so every pixel stays square. The logger
-adds a red "recording" dot at the top right. The drawing code is copied from the dyno's icons.py; the palette is the dyno's
+uses it unchanged (the web app's apple-touch-icon.png, at 1024 pixels), so both apps share one icon. The drawing code is copied from the dyno's icons.py; the palette is the dyno's
 default (green) theme, written out below so this script needs no browser. Re-run it after changing either.
 """
 from pathlib import Path
 
 from PIL import Image
 
-# The dyno's green theme (index.html :root), plus --err for the record dot.
+# The dyno's green theme (index.html :root).
 TOK = {"--bg": "#030f08", "--fg": "#46f08a", "--dim": "#1c7a45", "--faint": "#0e3d22", "--halo": "#08240f",
-       "--s2": "#ffb938", "--hi": "#d6ffe6", "--err": "#ff6b5e"}
+       "--s2": "#ffb938", "--hi": "#d6ffe6"}
 G = 32
 BAYER = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
 OUT = Path(__file__).resolve().parent.parent / "App/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon.png"
@@ -103,12 +103,6 @@ def draw(tok, kind):
     stroke(tpts, "--s2", amber_dark)
     stroke(ppts, "--fg", "--dim")
 
-    # the record dot: a 5x5 pixel disc in --err with a one-pixel highlight, top right, clear of the chart's corner
-    dot = {(x, y) for x in range(5) for y in range(5) if (x, y) not in ((0, 0), (4, 0), (0, 4), (4, 4))}
-    ox, oy = 23, 2
-    for x, y in dot:
-        put(ox + x, oy + y, "--err")
-    put(ox + 1, oy + 1, "--hi")
     return img
 
 
