@@ -54,7 +54,7 @@ give roughly 10-25 rows a second through a good adapter; older protocols are muc
 The app uses the Virtual Dyno page's look: its green phosphor palette (the page's default theme tokens, in
 `App/Views/Theme.swift` under the same names), the VT323 font (bundled with its OFL licence in `App/Resources/Fonts`),
 a terminal title bar, fieldset-style panels and `[ bracket ]` buttons. The app icon is the dyno's own 8-bit chart icon
-with a red record dot; `python3 tools/app_icon.py` redraws it.
+unchanged; `python3 tools/app_icon.py` redraws it.
 
 ## Screenshot mode
 
