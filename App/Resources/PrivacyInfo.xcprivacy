@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Privacy manifest. The app has no accounts, analytics, ads or tracking, and sends nothing off the phone: runs are
+  written to the app's Documents folder and leave it only when the person shares a file themselves. So it collects
+  no data types (Apple counts data as "collected" only when it is sent off the device) and does no tracking.
+  Required-reason APIs: UserDefaults (vehicle name, GoPro toggle, remembered Bluetooth devices), reason CA92.1
+  (read and written by the app itself only). Add an entry here if the app starts using another required-reason API
+  (file timestamps, system boot time, disk space, active keyboards).
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

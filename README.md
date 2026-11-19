@@ -49,12 +49,24 @@ the clutch in from about 70 to 30 MPH in the same run lets the dyno fit rolling 
 How fast the OBD log is depends on the car: CAN cars (2008 and later) answer all four fast PIDs in one request and
 give roughly 10-25 rows a second through a good adapter; older protocols are much slower.
 
+## Look
+
+The app uses the Virtual Dyno page's look: its green phosphor palette (the page's default theme tokens, in
+`App/Views/Theme.swift` under the same names), the VT323 font (bundled with its OFL licence in `App/Resources/Fonts`),
+a terminal title bar, fieldset-style panels and `[ bracket ]` buttons. The app icon is the dyno's own 8-bit chart icon
+with a red record dot; `python3 tools/app_icon.py` redraws it.
+
+## Screenshot mode
+
+Launch with `-demo` for made-up devices and a simulated pull on a loop (the Simulator has no Bluetooth);
+`tools/screenshots.sh` takes the App Store screenshots that way. See `App/Model/Demo.swift` and `APP_STORE.md`.
+
 ## Building
 
 ```
 brew install xcodegen
 xcodegen                     # writes DynoLogger.xcodeproj from project.yml
-open DynoLogger.xcodeproj    # set your team under Signing, run on an iPhone (Bluetooth needs a real device)
+open DynoLogger.xcodeproj    # run on an iPhone (Bluetooth needs a real device)
 swift test --package-path Core
 ```
 

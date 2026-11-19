@@ -228,3 +228,14 @@ extension OBDLink: CBPeripheralDelegate {
         }
     }
 }
+
+// Screenshot mode (see Demo): simulated readings, as if an adapter were streaming.
+extension OBDLink {
+    func demoFeed(_ r: OBDReading, rate: Double) {
+        name = "OBDLink CX"
+        status = .streaming
+        latest = r.values
+        self.rate = rate
+        onReading?(r)
+    }
+}

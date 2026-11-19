@@ -94,3 +94,16 @@ extension BLEGPSLink: CBPeripheralDelegate {
         }
     }
 }
+
+// Screenshot mode (see Demo): simulated fixes, as if a RaceBox were connected.
+extension BLEGPSLink {
+    func demoFeed(_ p: TrackPoint) {
+        connected = true
+        name = "RaceBox Mini S"
+        kind = .raceBox
+        latest = p
+        rate = 25
+        battery = 87
+        onPoint?(p)
+    }
+}

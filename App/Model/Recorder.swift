@@ -28,7 +28,7 @@ final class Recorder: ObservableObject {
         ble.obd.onReading = { [weak self] r in self?.take(r) }
         ble.gps.onPoint = { [weak self] p in self?.takeExternal(p) }
         phoneGPS.onPoint = { [weak self] p in self?.takePhone(p) }
-        phoneGPS.start()   // warm up the fix before the first run
+        if !Demo.isOn { phoneGPS.start() }   // warm up the fix before the first run
     }
 
     func start(vehicle: String, useGoPro: Bool) {
@@ -42,7 +42,7 @@ final class Recorder: ObservableObject {
         startedAt = Date()
         isRecording = true
         UIApplication.shared.isIdleTimerDisabled = true
-        phoneGPS.start()
+        if !Demo.isOn { phoneGPS.start() }
         usedGoPro = useGoPro && ble.goPro.ready
         if usedGoPro { ble.goPro.setRecording(true) }
         UserDefaults.standard.set(vehicle, forKey: "vehicle")

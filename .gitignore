@@ -4,3 +4,5 @@ DynoLogger.xcodeproj/
 xcuserdata/
 DerivedData/
 tools/out/
+screenshots/
+build/

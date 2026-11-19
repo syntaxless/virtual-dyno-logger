@@ -15,6 +15,20 @@ jobs:
         run: >
           xcodebuild -project DynoLogger.xcodeproj -scheme DynoLogger
           -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+  screenshots:
+    # The App Store screenshots in screenshot mode, so the look can be checked from a PR. Download them from the run's
+    # artifacts. The final store screenshots are taken with the same script on a Mac.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - run: brew install xcodegen
+      - name: Screenshots (iPhone 16 Pro Max)
+        run: tools/screenshots.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: screenshots/
   dyno-format:
     runs-on: ubuntu-latest
     steps:
